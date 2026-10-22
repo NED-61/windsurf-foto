@@ -1,6 +1,6 @@
 # windsurf-foto op de Unraid
 
-Voor de server "Media server" (Unraid 7.3.2, LAN `192.168.2.34`), waar fvjl-playbook al op draait via Tailscale Funnel op poort 8443. Deze dienst komt ernaast, op het funnel-adres zonder poortnummer (443). Niets in de router hoeft open.
+Voor de server "Media server" (Unraid 7.3.2, LAN `192.168.2.34`, Tailscale-adres `100.70.222.104`), waar fvjl-playbook al op draait via Tailscale Funnel op poort 8443. Deze dienst komt ernaast op poort 10000. **Poort 443 niet gebruiken:** daar staat de Unraid-webinterface zelf op (Tailscale Serve); zet je daar een funnel op, dan ben je je webinterface via Tailscale kwijt (herstellen: zie onderaan). Niets in de router hoeft open.
 
 ## Stap 1: het image laten bouwen (GitHub)
 
@@ -35,12 +35,12 @@ Dan met **Add another Path, Port, Variable, Label or Device**:
 
 | Type | Name | Container | Host / waarde |
 |---|---|---|---|
-| Port | web | 8000 | 8000 |
+| Port | web | 8000 | 8010 (8000 is op deze server al bezet) |
 | Path | data | `/data` | `/mnt/user/appdata/windsurf-foto` |
 | Path | orig | `/orig` | `/mnt/user/fotos/windsurf-archief` |
 | Variable | ADMIN_EMAIL | `ADMIN_EMAIL` | jouw e-mailadres |
 | Variable | ADMIN_PASSWORD | `ADMIN_PASSWORD` | een lang wachtwoord (minstens 10 tekens) |
-| Variable | APP_URL | `APP_URL` | `https://homelab257.tailc2d973.ts.net` (het funnel-adres uit stap 4; eerst invullen, zo nodig later aanpassen) |
+| Variable | APP_URL | `APP_URL` | `https://homelab257.tailc2d973.ts.net:10000` (het funnel-adres uit stap 4) |
 | Variable | TZ | `TZ` | `Europe/Amsterdam` |
 
 Mail (later, mag ook pas bij F2 in gebruik):
@@ -55,7 +55,7 @@ Mail (later, mag ook pas bij F2 in gebruik):
 
 De mailbox maak je in hPanel → E-mail. Zolang SMTP niet is ingevuld, worden mails niet verstuurd maar staan ze met de links op `/beheer?tab=mail`; je kunt een bevestigingslink dan zelf doorgeven.
 
-**Apply.** Check vanaf een pc in huis: <http://192.168.2.34:8000/api/health> geeft `{"ok": true, ...}`. Inloggen op <http://192.168.2.34:8000/inloggen> met ADMIN_EMAIL en ADMIN_PASSWORD.
+**Apply.** Check vanaf een pc in huis: <http://192.168.2.34:8010/api/health> geeft `{"ok": true, ...}` (vanuit het tailnet: <http://100.70.222.104:8010/api/health>). Inloggen op `/inloggen` met ADMIN_EMAIL en ADMIN_PASSWORD. Let op: de browser kan in het veld Value van een variabele iets anders invullen (autofill); controleer de waarden voor je op Apply klikt.
 
 Gaat het mis:
 
@@ -68,23 +68,23 @@ Gaat het mis:
 In de Unraid-terminal:
 
 ```bash
-tailscale funnel --bg 8000
+tailscale funnel --bg --https=10000 8010
 tailscale funnel status
 ```
 
-De status toont het adres, bijvoorbeeld `https://homelab257.tailc2d973.ts.net` (poort 443). fvjl op 8443 blijft gewoon staan.
+De status toont `https://homelab257.tailc2d973.ts.net:10000` naar poort 8010; de webinterface op 443 en fvjl op 8443 blijven staan. `APP_URL` in de container moet precies dit adres zijn, en `FOTO_URL` in `tools/build_site.py` van de archief-repo ook.
 
-Is poort 443 al bezet (de status laat dat zien), gebruik dan 10000:
+Uitzetten kan altijd: `tailscale funnel --https=10000 off`.
+
+**Check:** open `https://homelab257.tailc2d973.ts.net:10000/api/health` op je telefoon met wifi uit.
+
+**Per ongeluk toch 443 gebruikt** (webinterface via het ts.net-adres weg)? Open de webinterface via `https://100.70.222.104` (certificaatwaarschuwing wegklikken), terminal:
 
 ```bash
-tailscale funnel --bg --https=10000 8000
+tailscale funnel --https=443 off
 ```
 
-Het adres is dan `https://homelab257.tailc2d973.ts.net:10000`. Zet in dat geval `APP_URL` in de container op precies dat adres (met `:10000`) en pas `FOTO_URL` in `tools/build_site.py` van de archief-repo aan.
-
-Uitzetten kan altijd: `tailscale funnel --https=443 off`.
-
-**Check:** open `https://homelab257.tailc2d973.ts.net/api/health` op je telefoon met wifi uit.
+en zet in SETTINGS, Tailscale, de WebGUI-optie opnieuw op Serve. Werkt dat niet: `tailscale serve --bg --https=443 https+insecure://127.0.0.1:443`.
 
 ## Stap 5: de meting (F0)
 
@@ -94,7 +94,7 @@ Uitzetten kan altijd: `tailscale funnel --https=443 off`.
 
 Vlot (de 60 thumbnails binnen een paar seconden, ook met drie tegelijk)? Dan is Funnel definitief. Hapert het, of duurt het tien seconden of meer, dan komt de cache-optie (Cloudflare, K1 in het fotoplan) alsnog op tafel voordat er foto's bij komen.
 
-Staat de funnel op een ander adres dan `https://homelab257.tailc2d973.ts.net`, zet dat dan achter de testpagina: `fototest.html?foto=https://homelab257.tailc2d973.ts.net:10000`.
+Staat de funnel op een ander adres dan `https://homelab257.tailc2d973.ts.net:10000`, zet dat dan achter de testpagina: `fototest.html?foto=https://...`. Meet niet vanaf een apparaat dat zelf in het tailnet zit: dat gaat rechtstreeks over Tailscale en niet door de funnel, dus dat zegt niets over wat bezoekers merken.
 
 ## Bijwerken
 
