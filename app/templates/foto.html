@@ -5,7 +5,7 @@
 <nav class="crumbs" aria-label="Kruimelpad"><a href="/">Foto's</a><span aria-hidden="true">/</span><a href="/wedstrijd/{{ f.event_slug }}">{{ event_naam(f.event_slug) }}</a><span aria-hidden="true">/</span><span>Foto {{ f.id }}</span></nav>
 <article class="foto-detail">
   <figure>
-    <img src="{{ fj.m }}" width="{{ f.width }}" height="{{ f.height }}" alt="{{ f.caption or ('Foto ' ~ f.id) }}">
+    <img src="/i/{{ f.key }}/m.jpg" width="{{ f.width }}" height="{{ f.height }}" alt="{{ f.caption or ('Foto ' ~ f.id) }}">
     <figcaption>
       {% if f.caption %}<p class="caption">{{ f.caption }}</p>{% endif %}
       <p class="small muted">Foto: {% if f.rights_basis == 'onbekend' %}fotograaf onbekend{% else %}{{ f.credit or uploader.name }}{% endif %}{% if f.taken_at %}, {{ f.taken_at|dt }}{% endif %}. {{ LICENTIES[f.licence] }}. Geplaatst door {{ uploader.name }} op {{ f.uploaded_at|datum }}.

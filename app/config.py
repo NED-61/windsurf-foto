@@ -6,7 +6,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSIE = "0.3.2"  # F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend)
+VERSIE = "0.3.3"  # F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), eigen pagina's met relatieve paden
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))                       # SSD: database, verkleinde versies, cache
 ORIG_DIR = Path(os.environ.get("ORIG_DIR", str(DATA_DIR / "orig")))        # harde schijven: de originelen
