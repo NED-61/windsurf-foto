@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titel %}Account maken{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>Account maken</h1>
+<p class="lede">Met een account kun je foto's plaatsen bij een wedstrijd. Je naam komt bij je foto's te staan.</p></header>
+<form class="form smal" method="post" action="/registreren">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if fout %}<p class="fout">{{ fout }}</p>{% endif %}
+  <label>E-mailadres <input name="email" type="email" required autocomplete="email" value="{{ email or '' }}"></label>
+  <label>Naam <input name="naam" required minlength="2" maxlength="60" autocomplete="name" value="{{ naam or '' }}" placeholder="Voornaam en achternaam"></label>
+  <label>Wachtwoord <input name="wachtwoord" type="password" required minlength="10" autocomplete="new-password"></label>
+  <label>Nog een keer <input name="wachtwoord2" type="password" required minlength="10" autocomplete="new-password"></label>
+  <p class="small muted">Minstens 10 tekens. We sturen een mail om je adres te bevestigen.</p>
+  <p><button class="btn" type="submit">Account maken</button></p>
+  <p class="small">Al een account? <a href="/inloggen">Inloggen</a></p>
+</form>
+{% endblock %}

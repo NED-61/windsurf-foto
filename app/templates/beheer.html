@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block titel %}Beheer{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>Beheer</h1></header>
+<nav class="tabs" aria-label="Beheer">
+{% for t in ['wachtrij', 'meldingen', 'claims', 'accounts', 'log', 'mail', 'archief'] %}<a href="/beheer?tab={{ t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ t|capitalize }}{% if t == 'wachtrij' and wachtrij_n %} <span class="pill">{{ wachtrij_n }}</span>{% endif %}</a>{% endfor %}
+</nav>
+
+{% if tab == 'wachtrij' %}
+{% if not groepen %}<p class="muted">De wachtrij is leeg.</p>{% endif %}
+{% for (uid, uname, uemail, slug), fotos in groepen.items() %}
+<section class="block">
+  <div class="block-h"><h2>{{ uname }} <small class="muted">{{ uemail }}</small>: <a href="/wedstrijd/{{ slug }}">{{ event_naam(slug) }}</a></h2>
+    <form class="form inline" method="post" action="/beheer/account/{{ uid }}/goedkeuren-alles"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="wedstrijd" value="{{ slug }}"><button class="btn" type="submit">Alle {{ fotos|length }} goedkeuren</button></form>
+  </div>
+  <div class="fotos-grid beheer-grid">
+  {% for f in fotos %}
+    <div class="ft-b">
+      <a class="ft" href="/foto/{{ f.id }}" data-m="{{ f.m }}" data-url="/foto/{{ f.id }}" data-caption="{{ f.caption }}" data-credit="{{ f.credit }}"><img loading="lazy" src="{{ f.t }}" width="{{ f.tw }}" height="{{ f.th }}" alt=""></a>
+      <div class="acties">
+        <form method="post" action="/beheer/foto/{{ f.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><button class="btn btn-klein" type="submit">OK</button></form>
+        <form method="post" action="/beheer/foto/{{ f.id }}/verbergen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><input name="reden" placeholder="reden" class="klein"><button class="btn btn-klein btn-stil" type="submit">Verberg</button></form>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% if verborgen %}
+<section class="block">
+  <div class="block-h"><h2>Verborgen (laatste 100)</h2></div>
+  <table class="tbl"><thead><tr><th>Foto</th><th>Van</th><th>Wedstrijd</th><th>Reden</th><th>Wanneer</th><th></th></tr></thead><tbody>
+  {% for f in verborgen %}<tr><td><a href="/foto/{{ f.id }}">{{ f.id }}</a></td><td>{{ f.uname }}</td><td>{{ event_naam(f.event_slug) }}</td><td>{{ f.status_reason or '' }}</td><td>{{ f.status_at|dt }}</td>
+    <td><form class="inline" method="post" action="/beheer/foto/{{ f.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><button class="btn btn-klein" type="submit">Toch plaatsen</button></form></td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+
+{% elif tab == 'meldingen' %}
+{% if not open %}<p class="muted">Geen open meldingen.</p>{% endif %}
+{% for m in open %}
+<section class="block melding">
+  <a class="ft" href="/foto/{{ m.photo_id }}"><img src="/i/{{ m.key }}/t.jpg" width="200" alt=""></a>
+  <div>
+    <p><a href="/foto/{{ m.photo_id }}">Foto {{ m.photo_id }}</a>, {{ event_naam(m.event_slug) }}, status {{ m.pstatus }}. Gemeld {{ m.created_at|dt }} door {{ m.uname or 'anoniem' }}:</p>
+    <p class="caption">{{ m.reason }}</p>
+    <div class="acties">
+      <form class="inline" method="post" action="/beheer/foto/{{ m.photo_id }}/verbergen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=meldingen"><input name="reden" placeholder="reden voor de uploader" class="klein"><button class="btn btn-klein" type="submit">Verbergen</button></form>
+      <form class="inline" method="post" action="/beheer/melding/{{ m.id }}/afgehandeld"><input type="hidden" name="csrf" value="{{ csrf }}"><input name="notitie" placeholder="notitie" class="klein"><button class="btn btn-klein btn-stil" type="submit">Afgehandeld</button></form>
+    </div>
+  </div>
+</section>
+{% endfor %}
+{% if afgehandeld %}<details><summary class="small">Afgehandeld (laatste 50)</summary><table class="tbl"><tbody>{% for m in afgehandeld %}<tr><td><a href="/foto/{{ m.photo_id }}">{{ m.photo_id }}</a></td><td>{{ m.reason }}</td><td>{{ m.handled_note or '' }}</td><td>{{ m.handled_at|dt }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}
+
+{% elif tab == 'claims' %}
+{% if not claims %}<p class="muted">Geen open claims.</p>{% endif %}
+{% for c in claims %}
+<section class="block">
+  <p><strong>{{ c.uname }}</strong> <small class="muted">{{ c.uemail }}, account sinds {{ c.ucreated|datum }}, {{ c.n_fotos }} foto's</small> claimt
+    <strong>{% if c.rider %}<a href="{{ cfg.SITE_URL }}/rider/{{ c.person_id }}.html">{{ c.rider.name }}</a> <small class="muted">{{ (c.rider.sails or [])|join(' ') }}{% if c.rider.years %} · {{ c.rider.years }}{% endif %}</small>{% else %}{{ c.person_id }}{% endif %}</strong>
+    {% if c.al_gekoppeld %}<span class="badge badge-verborgen">al gekoppeld aan {{ c.al_gekoppeld.name }}</span>{% endif %}</p>
+  {% if c.note %}<p class="caption">{{ c.note }}</p>{% endif %}
+  <div class="acties">
+    <form class="inline" method="post" action="/beheer/claim/{{ c.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein" type="submit">Goedkeuren</button></form>
+    <form class="inline" method="post" action="/beheer/claim/{{ c.id }}/afwijzen"><input type="hidden" name="csrf" value="{{ csrf }}"><input name="toelichting" placeholder="toelichting (gaat naar de aanvrager)" class="klein"><button class="btn btn-klein btn-stil" type="submit">Afwijzen</button></form>
+  </div>
+</section>
+{% endfor %}
+<section class="block">
+  <div class="block-h"><h2>Claimcode uitdelen</h2></div>
+  <p class="small muted">Voor iemand die je kent: met de code is de claim meteen goedgekeurd. Invullen op <code>{{ cfg.APP_URL }}/claim</code>.</p>
+  <form class="form smal" method="post" action="/beheer/code" id="codeform">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="person_id" id="person_id">
+    <label>Rider <input id="rider-q" type="search" autocomplete="off" placeholder="naam of zeilnummer"></label>
+    <div id="rider-hits" class="hits"></div>
+    <p id="rider-gekozen" class="small" hidden>Gekozen: <strong></strong> <button type="button" class="link" id="rider-anders">anders</button></p>
+    <p><button class="btn btn-stil" type="submit" id="claim-knop" disabled>Code maken</button></p>
+  </form>
+  {% if codes %}<table class="tbl"><thead><tr><th>Code</th><th>Rider</th><th>Gemaakt</th></tr></thead><tbody>{% for c in codes %}<tr><td><code>{{ c.code }}</code></td><td>{{ rider_naam(c.person_id) }}</td><td>{{ c.created_at|dt }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+</section>
+{% if beslist %}<details><summary class="small">Beoordeeld (laatste 30)</summary><table class="tbl"><tbody>{% for c in beslist %}<tr><td>{{ c.uname }}</td><td>{{ rider_naam(c.person_id) }}</td><td>{{ c.status }}</td><td>{{ c.decision_note or '' }}</td><td>{{ c.decided_at|dt }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}
+
+{% elif tab == 'accounts' %}
+<table class="tbl"><thead><tr><th>Naam</th><th>E-mail</th><th>Rider</th><th>Status</th><th class="num">Zichtbaar</th><th class="num">Wacht</th><th class="num">Weg</th><th class="num">Meldingen</th><th>Sinds</th><th></th></tr></thead><tbody>
+{% for a in accounts %}
+<tr{% if a.blocked %} class="geblokkeerd"{% endif %}>
+  <td><a href="/beheer?tab=log&account={{ a.id }}">{{ a.name }}</a></td><td>{{ a.email }}{% if not a.email_verified %} <span class="badge badge-wacht">onbevestigd</span>{% endif %}</td>
+  <td>{% if a.person_id %}{{ rider_naam(a.person_id) }}{% endif %}</td>
+  <td>{% if a.role == 'admin' %}admin{% elif a.blocked %}geblokkeerd{% elif a.trusted %}vertrouwd{% else %}nieuw{% endif %}</td>
+  <td class="num">{{ a.n_zichtbaar }}</td><td class="num">{{ a.n_wacht }}</td><td class="num">{{ a.n_weg }}</td><td class="num">{{ a.n_meldingen }}</td><td>{{ a.created_at|datum }}</td>
+  <td class="acties">
+    {% if a.id != user.id %}
+    {% if a.trusted %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/onvertrouwd"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein btn-stil">Niet vertrouwd</button></form>
+    {% else %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/vertrouwd"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein">Vertrouwd</button></form>{% endif %}
+    {% if a.blocked %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/deblokkeren"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein btn-stil">Deblokkeren</button></form>
+    {% else %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/blokkeren" onsubmit="return confirm('Account blokkeren? Alle foto\'s van dit account worden verborgen.')"><input type="hidden" name="csrf" value="{{ csrf }}"><input name="reden" placeholder="reden" class="klein"><button class="btn btn-klein btn-stil">Blokkeren</button></form>{% endif %}
+    {% if a.person_id %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/ontkoppelen"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein btn-stil">Ontkoppelen</button></form>{% endif %}
+    {% if a.n_wacht %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/goedkeuren-alles"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein">Alles goedkeuren</button></form>{% endif %}
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody></table>
+
+{% elif tab == 'log' %}
+<form class="form inline" method="get" action="/beheer"><input type="hidden" name="tab" value="log"><input name="account" type="number" placeholder="account-id" value="{{ account_f or '' }}" class="klein"><input name="wedstrijd" placeholder="wedstrijd-slug" value="{{ wedstrijd_f }}" class="klein"><button class="btn btn-klein btn-stil">Filter</button></form>
+<table class="tbl"><thead><tr><th>Wanneer</th><th>Wie</th><th>Wat</th><th>Foto</th><th>Wedstrijd</th><th>Detail</th></tr></thead><tbody>
+{% for l in regels %}<tr><td>{{ l.at|dt }}</td><td>{{ l.uname or '' }}</td><td>{{ l.action }}{% if l.target_user %} <small class="muted">→ account {{ l.target_user }}</small>{% endif %}</td><td>{% if l.photo_id %}<a href="/foto/{{ l.photo_id }}">{{ l.photo_id }}</a>{% endif %}</td><td>{{ l.event_slug or '' }}</td><td>{{ l.detail or '' }}</td></tr>{% endfor %}
+</tbody></table>
+
+{% elif tab == 'mail' %}
+<p class="small muted">{% if smtp %}SMTP via {{ cfg.SMTP_HOST }}:{{ cfg.SMTP_PORT }} als {{ cfg.MAIL_FROM }}.{% else %}SMTP is niet ingesteld: mails worden niet verstuurd. Hieronder staat de inhoud, met de links; die kun je zelf doorgeven. Instellen: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM (zie UNRAID.md).{% endif %}</p>
+{% for m in mails %}
+<details class="mail"{% if not m.sent and loop.index <= 3 %} open{% endif %}>
+  <summary>{{ m.at|dt }} · {{ m.to_addr }} · {{ m.subject }} · {% if m.sent %}verstuurd{% else %}<span class="badge badge-verborgen">niet verstuurd</span> {{ m.error or '' }}{% endif %}</summary>
+  <pre>{{ m.body }}</pre>
+  {% if not m.sent %}<form class="inline" method="post" action="/beheer/mail/{{ m.id }}/opnieuw"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein btn-stil">Opnieuw versturen</button></form>{% endif %}
+</details>
+{% endfor %}
+
+{% elif tab == 'archief' %}
+<div class="prose">
+<p>Wedstrijden en riders komen van <code>{{ status.bron }}/assets/wedstrijden.json</code> en <code>riders.json</code>. Nu in gebruik: {{ status.wedstrijden }} wedstrijden en {{ status.riders }} riders{% if status.opgehaald %}, opgehaald op {{ status.opgehaald|dt }}{% endif %}.</p>
+{% if status.fout %}<p class="fout">Laatste fout: {{ status.fout }}</p>{% endif %}
+<form class="form inline" method="post" action="/beheer/archief/verversen"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Nu opnieuw ophalen</button></form>
+<p class="small muted">Versie {{ cfg.VERSIE }}. Publiek adres {{ cfg.APP_URL }}. Toegestane sites voor de api: {{ cfg.SITE_ORIGINS|join(', ') }}. Originelen in {{ cfg.ORIG_DIR }}, verkleinde versies en database in {{ cfg.DATA_DIR }}.</p>
+</div>
+{% endif %}
+{% endblock %}
+{% block script %}
+{% if tab == 'claims' %}
+<script>
+(function () {
+  var q = document.getElementById("rider-q"), hits = document.getElementById("rider-hits"), pid = document.getElementById("person_id"),
+      gek = document.getElementById("rider-gekozen"), knop = document.getElementById("claim-knop");
+  if (!q) return;
+  var t;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  q.addEventListener("input", function () {
+    clearTimeout(t);
+    t = setTimeout(function () {
+      if (!q.value.trim()) { hits.innerHTML = ""; return; }
+      fetch("/api/riders?q=" + encodeURIComponent(q.value)).then(function (r) { return r.json(); }).then(function (lst) {
+        hits.innerHTML = lst.map(function (r) { return '<button type="button" class="hit" data-id="' + esc(r.id) + '" data-name="' + esc(r.name) + '"><span>' + esc(r.name) + '</span><small>' + esc((r.sails || []).join(" ")) + '</small></button>'; }).join("");
+      });
+    }, 200);
+  });
+  hits.addEventListener("click", function (e) {
+    var b = e.target.closest(".hit"); if (!b) return;
+    pid.value = b.dataset.id; gek.querySelector("strong").textContent = b.dataset.name; gek.hidden = false; hits.innerHTML = ""; q.value = ""; knop.disabled = false;
+  });
+  document.getElementById("rider-anders").addEventListener("click", function () { pid.value = ""; gek.hidden = true; knop.disabled = true; q.focus(); });
+})();
+</script>
+{% endif %}
+{% endblock %}

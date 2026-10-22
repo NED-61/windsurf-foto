@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titel %}Wachtwoord{% endblock %}
+{% block inhoud %}
+{% if stap == 'vragen' %}
+<header class="ph"><h1>Wachtwoord vergeten</h1><p class="lede">Vul je e-mailadres in; je krijgt een link om een nieuw wachtwoord in te stellen.</p></header>
+<form class="form smal" method="post" action="/wachtwoord-vergeten">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>E-mailadres <input name="email" type="email" required autocomplete="email"></label>
+  <p><button class="btn" type="submit">Stuur de link</button></p>
+</form>
+{% else %}
+<header class="ph"><h1>Nieuw wachtwoord</h1></header>
+<form class="form smal" method="post" action="/wachtwoord/{{ token }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if fout %}<p class="fout">{{ fout }}</p>{% endif %}
+  <label>Nieuw wachtwoord <input name="wachtwoord" type="password" required minlength="10" autocomplete="new-password"></label>
+  <label>Nog een keer <input name="wachtwoord2" type="password" required minlength="10" autocomplete="new-password"></label>
+  <p><button class="btn" type="submit">Opslaan</button></p>
+</form>
+{% endif %}
+{% endblock %}

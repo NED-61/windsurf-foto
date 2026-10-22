@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titel %}Inloggen{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>Inloggen</h1></header>
+<form class="form smal" method="post" action="/inloggen">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="terug" value="{{ terug or '' }}">
+  {% if fout %}<p class="fout">{{ fout }}</p>{% endif %}
+  <label>E-mailadres <input name="email" type="email" required autocomplete="email" value="{{ email or '' }}"></label>
+  <label>Wachtwoord <input name="wachtwoord" type="password" required autocomplete="current-password"></label>
+  <p><button class="btn" type="submit">Inloggen</button></p>
+  <p class="small"><a href="/wachtwoord-vergeten">Wachtwoord vergeten?</a> · Nog geen account? <a href="/registreren">Account maken</a></p>
+</form>
+{% endblock %}

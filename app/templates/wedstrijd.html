@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titel %}Foto's {{ ev.name if ev else slug }}{% endblock %}
+{% block robots %}{% endblock %}
+{% block inhoud %}
+<nav class="crumbs" aria-label="Kruimelpad"><a href="/">Foto's</a><span aria-hidden="true">/</span><span>{{ ev.name if ev else slug }}</span></nav>
+<header class="ph">
+  <h1>{{ ev.name if ev else slug }}</h1>
+  <p class="lede">{% if ev %}{% if ev.date %}{{ ev.date|datum }}{% if ev.date_end %} tot {{ ev.date_end|datum }}{% endif %}{% endif %}{% if ev.location %}, {{ ev.location }}{% endif %}. {% endif %}{{ fotos|length }} foto's. <a href="{{ site_url }}">Uitslagen van deze wedstrijd</a></p>
+  <p><a class="btn" href="/upload?wedstrijd={{ slug }}">Foto's toevoegen</a></p>
+</header>
+{% if fotos %}
+{% with fotos=fotos %}{% include "_grid.html" %}{% endwith %}
+{% else %}
+<p class="muted">Nog geen foto's van deze wedstrijd. Heb jij er? Voeg ze toe.</p>
+{% endif %}
+{% if eigen %}
+<section class="block">
+  <div class="block-h"><h2>Jouw foto's die nog niet zichtbaar zijn</h2></div>
+  <p class="small muted">Wachtrij: de beheerder kijkt er nog naar. Verborgen: niet geplaatst, de reden staat bij de foto.</p>
+  {% with fotos=eigen, status=True %}{% include "_grid.html" %}{% endwith %}
+</section>
+{% endif %}
+{% endblock %}

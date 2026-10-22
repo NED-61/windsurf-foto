@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titel %}Ridernaam claimen{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>Ridernaam claimen</h1>
+<p class="lede">Sta je zelf in het archief? Koppel je account aan je ridernaam. De beheerder kijkt er even naar; daarna staan je foto's direct online.</p></header>
+{% if user.person_id %}
+<p>Je account is al gekoppeld aan {{ rider_naam(user.person_id) }}.</p>
+{% elif open_claim %}
+<p>Je claim op <strong>{{ rider_naam(open_claim.person_id) }}</strong> staat open sinds {{ open_claim.created_at|datum }}. Je krijgt een mail zodra hij beoordeeld is.</p>
+{% else %}
+<form class="form smal" method="post" action="/claim" id="claimform">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="person_id" id="person_id" value="">
+  {% if fout %}<p class="fout">{{ fout }}</p>{% endif %}
+  <label>Zoek je naam of zeilnummer <input id="rider-q" type="search" autocomplete="off" placeholder="Bijvoorbeeld: Jansen, of 61"></label>
+  <div id="rider-hits" class="hits"></div>
+  <p id="rider-gekozen" class="small" hidden>Gekozen: <strong></strong> <button type="button" class="link" id="rider-anders">anders</button></p>
+  <label>Toelichting voor de beheerder <input name="toelichting" maxlength="300" placeholder="Bijvoorbeeld: NED 61, slalom sinds 2017"></label>
+  <p><button class="btn" type="submit" id="claim-knop" disabled>Claim indienen</button></p>
+</form>
+<section class="block">
+  <div class="block-h"><h2>Heb je een claimcode?</h2></div>
+  <form class="form smal" method="post" action="/claim/code">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Code <input name="code" maxlength="12" autocomplete="off" placeholder="8 tekens" style="text-transform: uppercase"></label>
+    <p><button class="btn btn-stil" type="submit">Code gebruiken</button></p>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
+{% block script %}
+<script>
+(function () {
+  var q = document.getElementById("rider-q"), hits = document.getElementById("rider-hits"), pid = document.getElementById("person_id"),
+      gek = document.getElementById("rider-gekozen"), knop = document.getElementById("claim-knop");
+  if (!q) return;
+  var t;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  q.addEventListener("input", function () {
+    clearTimeout(t);
+    t = setTimeout(function () {
+      if (!q.value.trim()) { hits.innerHTML = ""; return; }
+      fetch("/api/riders?q=" + encodeURIComponent(q.value)).then(function (r) { return r.json(); }).then(function (lst) {
+        hits.innerHTML = lst.length ? lst.map(function (r) {
+          return '<button type="button" class="hit" data-id="' + esc(r.id) + '" data-name="' + esc(r.name) + '"><span>' + esc(r.name) + '</span><small>' + esc((r.sails || []).join(" ")) + (r.years ? " · " + esc(r.years) : "") + '</small></button>';
+        }).join("") : '<p class="none">Niets gevonden. Sta je nog niet in het archief? Upload dan gewoon je foto\'s; koppelen kan later.</p>';
+      });
+    }, 200);
+  });
+  hits.addEventListener("click", function (e) {
+    var b = e.target.closest(".hit"); if (!b) return;
+    pid.value = b.dataset.id; gek.querySelector("strong").textContent = b.dataset.name; gek.hidden = false; hits.innerHTML = ""; q.value = ""; knop.disabled = false;
+  });
+  document.getElementById("rider-anders").addEventListener("click", function () { pid.value = ""; gek.hidden = true; knop.disabled = true; q.focus(); });
+})();
+</script>
+{% endblock %}

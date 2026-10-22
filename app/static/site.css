@@ -1,0 +1,223 @@
+/* Stijl C "Rustig": veel witruimte, alleen dunne horizontale lijnen, één linkkleur, geen kaders, labels of accenten.
+   Systeemletter (geen webfonts): de site laadt niets van andere domeinen. */
+:root {
+  --bg: #fafafa;
+  --fg: #222222;
+  --mut: #6b6b6b;
+  --line: #e3e3e3;
+  --link: #2b59c3;
+  --hover: #f0f0f0;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #161616; --fg: #e8e8e8; --mut: #9a9a9a; --line: #2e2e2e; --link: #8fb0ff; --hover: #222222; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #161616; --fg: #e8e8e8; --mut: #9a9a9a; --line: #2e2e2e; --link: #8fb0ff; --hover: #222222; color-scheme: dark; }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+       min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1 0 auto; width: 100%; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: 1.9rem; letter-spacing: -.01em; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 1.05rem; }
+h4 { font-size: .9rem; font-weight: 500; color: var(--mut); }
+p { margin: 0; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: -999px; top: 0; background: var(--bg); padding: .5rem 1rem; z-index: 10; }
+.skip:focus { left: 16px; }
+.muted { color: var(--mut); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.wrap { max-width: 64rem; margin-inline: auto; padding-inline: 16px; }
+main.wrap { padding-block: 1.5rem 4rem; display: grid; gap: 2rem; align-content: start; }
+main.wrap > * { min-width: 0; }
+
+/* kop */
+.top-in { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.75rem; padding-block: 1rem; }
+.brand { color: var(--fg); font-weight: 600; }
+.brand span { margin-left: .25em; font-weight: 400; color: var(--mut); }
+.brand:hover { text-decoration: none; }
+.nav { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+.nav a { color: var(--mut); }
+.nav a[aria-current="page"] { color: var(--fg); }
+.qs { position: relative; margin-left: auto; flex: 0 1 13rem; }
+.qs input, .big-search input, .duel-form input {
+  width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: .3rem .6rem;
+}
+.qs input { font-size: .92rem; }
+.qs input:focus, .big-search input:focus, .duel-form input:focus { outline: none; border-color: var(--link); }
+.qs-pop { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); min-width: 16rem; background: var(--bg);
+          border: 1px solid var(--line); border-radius: 4px; padding: .25rem 0; max-height: 70vh; overflow: auto; }
+.qs-pop a, .q-out a.hit { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem .7rem; color: var(--fg); }
+.qs-pop a:hover, .qs-pop a.sel, .q-out a.hit:hover { background: var(--hover); text-decoration: none; }
+.qs-pop small, .q-out small { color: var(--mut); white-space: nowrap; }
+.qs-pop .grp { font-size: .82rem; color: var(--mut); padding: .35rem .7rem .1rem; }
+.qs-pop .none { padding: .35rem .7rem; color: var(--mut); }
+
+/* paginakoppen */
+.crumbs { font-size: .88rem; color: var(--mut); display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: -1rem; }
+.crumbs a { color: var(--mut); }
+.ph { display: grid; gap: .4rem; }
+.lede, .sibs, .aka { color: var(--mut); max-width: 46rem; }
+.note { border-left: 2px solid var(--mut); padding: .1rem 0 .1rem .8rem; max-width: 46rem; }
+
+/* home */
+.hero { display: grid; gap: .75rem; padding-block: .5rem; }
+.big-search { position: relative; max-width: 32rem; }
+.big-search input { font-size: 1rem; padding: .55rem .75rem; }
+.block { display: grid; gap: .75rem; }
+.block > *, .duel-out > *, .q-out > *, .cls > *, .ev > * { min-width: 0; }
+.block-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .5rem 1rem; }
+.ev-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 1.5rem 2.5rem; }
+.ev-card { display: grid; gap: .3rem; align-content: start; }
+.ev-card h3 a { color: var(--fg); }
+.ev-meta { color: var(--mut); font-size: .9rem; }
+.winners { list-style: none; margin: .25rem 0 0; padding: 0; display: grid; font-size: .95rem; }
+.winners li { display: flex; justify-content: space-between; gap: .75rem; border-bottom: 1px solid var(--line); padding-block: .3rem; }
+.winners li span { text-align: right; white-space: nowrap; }
+.winners li span a { color: var(--fg); }
+.winners li.more { border: 0; }
+
+/* zeilnummer: gewone tekst */
+.sail { color: var(--mut); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sail .cc { margin-right: .25em; font-size: .85em; }
+.sail-lg { color: var(--fg); font-size: 1.05rem; }
+.sails { list-style: none; padding: 0; margin: .25rem 0 0; display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; }
+.sails li { display: flex; align-items: baseline; gap: .5rem; }
+.sails .yrs { color: var(--mut); font-size: .9rem; font-variant-numeric: tabular-nums; }
+
+/* tabellen */
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; }
+.res, .list { width: 100%; font-size: .95rem; }
+.res th, .res td, .list th, .list td { padding: .4rem .5rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+.res thead th, .list thead th { color: var(--mut); font-weight: 500; font-size: .85rem; white-space: nowrap; }
+.res tbody th, .list tbody th { font-weight: 500; }
+.res td.num, .list td.num, .res th.num, .list th.num { text-align: right; }
+.res caption, .list caption { caption-side: bottom; text-align: left; color: var(--mut); font-size: .85rem; padding-top: .6rem; }
+.res .nm, .heat-t .nm { white-space: nowrap; }
+.res .nm a, .list .nm a, .heat-t .nm a { color: var(--fg); }
+.rk { width: 2.8rem; text-align: right; color: var(--mut); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rk-1, .rk-pod { color: var(--fg); }
+.rk-none { font-size: .85rem; }
+.tot { font-weight: 600; }
+.disc { color: var(--mut); }
+.res tr.nc th, .res tr.nc td, .res tr.nc .rk { color: var(--mut); font-weight: 400; }
+/* fleet racing: veel racekolommen; compact, statuscode onder de punten, netto blijft zichtbaar bij horizontaal scrollen */
+.res.fleet th, .res.fleet td { padding-inline: .4rem; }
+.res.fleet td.rc { white-space: nowrap; line-height: 1.25; }
+.res.fleet td.rc small { display: block; font-size: .7rem; color: var(--mut); }
+.tbl-cap { color: var(--mut); font-size: .85rem; margin: .6rem 0 0; }
+.res.fleet .stick { position: sticky; right: 0; background: var(--bg); box-shadow: -1px 0 0 var(--line); }
+.div { color: var(--mut); white-space: nowrap; }
+.flag { color: var(--mut); cursor: help; }
+abbr[title] { text-decoration: none; color: var(--mut); cursor: help; }
+.rider-t .plc { white-space: nowrap; }
+.rider-t .pl { font-variant-numeric: tabular-nums; }
+.rider-t .of, .rider-t .val { color: var(--mut); }
+
+/* heats */
+.elim { border-top: 1px solid var(--line); }
+.elim:last-of-type { border-bottom: 1px solid var(--line); }
+.elim summary { cursor: pointer; padding: .6rem 0; }
+.el-n { font-weight: 600; margin-right: 1rem; }
+.el-win { margin-right: .75rem; }
+.el-win::before { content: "winnaar "; color: var(--mut); }
+.tag { color: var(--mut); font-size: .85rem; }
+.heats { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 1.25rem 2rem; padding: .25rem 0 1.25rem; }
+.heat { display: grid; gap: .3rem; align-content: start; min-width: 0; }
+.heat.final h4 { color: var(--fg); }
+.heat-t { width: 100%; font-size: .9rem; }
+.heat-t td { padding: .2rem .3rem; border-bottom: 1px solid var(--line); }
+.heat-t .rk { width: 2rem; }
+.heat-t .rem { color: var(--mut); text-align: right; }
+.linkbtn { font: inherit; font-size: .92rem; color: var(--link); background: none; border: 0; padding: 0; cursor: pointer; }
+.linkbtn:hover { text-decoration: underline; }
+.small { font-size: .88rem; color: var(--mut); }
+.notes { margin: 0; padding-left: 1.2rem; display: grid; gap: .2rem; max-width: 52rem; }
+.src a { color: var(--mut); text-decoration: underline; }
+
+/* wedstrijden */
+.year { display: grid; grid-template-columns: 5rem 1fr; gap: .5rem 1.5rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.yr { font-size: 1.2rem; color: var(--mut); font-weight: 500; font-variant-numeric: tabular-nums; }
+.evs { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; min-width: 0; }
+.ev { display: grid; gap: .3rem; }
+.ev-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem 1rem; }
+.ev-name { font-weight: 600; color: var(--fg); }
+.chips { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; font-size: .95rem; }
+
+/* evenement */
+.cls-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 1.75rem 2.5rem; }
+.cls { display: grid; gap: .4rem; align-content: start; }
+.cls h2 a { color: var(--fg); }
+.podium { list-style: none; margin: 0; padding: 0; display: grid; }
+.podium li { display: grid; grid-template-columns: 1.6rem 1fr auto; align-items: baseline; gap: .5rem; padding-block: .3rem; border-bottom: 1px solid var(--line); }
+.pos { color: var(--mut); text-align: right; font-variant-numeric: tabular-nums; }
+.pos.p1 { color: var(--fg); }
+.podium .who a { color: var(--fg); }
+.podium .val { color: var(--mut); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.more { font-size: .95rem; }
+
+/* fleets op de evenementpagina */
+.fleet-h { grid-column: 1 / -1; font-size: 1rem; font-weight: 500; color: var(--mut); border-top: 1px solid var(--line); padding-top: .9rem; margin-top: .25rem; }
+
+/* riders */
+.az { display: flex; flex-wrap: wrap; gap: .2rem .9rem; }
+.letter { display: grid; gap: .4rem; scroll-margin-top: 1rem; }
+.letter h2 { color: var(--mut); font-weight: 500; }
+.list .best { color: var(--mut); font-size: .92rem; }
+
+/* statistieken */
+.tops { grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.5rem 2.5rem; }
+.tops > div { display: grid; gap: .4rem; align-content: start; min-width: 0; }
+.rank { margin: 0; padding-left: 1.6rem; color: var(--mut); }
+.rank li { padding-block: .2rem; border-bottom: 1px solid var(--line); }
+.rank li a { color: var(--fg); }
+.rank li .num { float: right; color: var(--fg); }
+.chart { margin: 0; position: relative; max-width: 44rem; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart .g { stroke: var(--line); stroke-width: 1; }
+.chart .base { stroke: var(--mut); stroke-width: 1; }
+.chart .ax { fill: var(--mut); font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.chart .vl { fill: var(--fg); font: 600 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.chart .m { fill: var(--link); }
+.chart .hit { fill: transparent; }
+.chart .bar:hover .m, .chart .bar:focus .m { fill: var(--fg); }
+.chart .bar:focus { outline: none; }
+.tip { position: absolute; pointer-events: none; background: var(--fg); color: var(--bg); font-size: .85rem; padding: .2rem .45rem; border-radius: 3px; white-space: nowrap; transform: translate(-50%, -110%); }
+.tbl-view summary { cursor: pointer; color: var(--link); font-size: .92rem; }
+.tbl-view table { margin-top: .5rem; max-width: 14rem; }
+.duel-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .75rem 1.25rem; max-width: 38rem; }
+.duel-form label { display: block; font-size: .9rem; color: var(--mut); margin-bottom: .2rem; }
+.duel-out { display: grid; gap: .6rem; }
+.duel-sum { font-size: 1.1rem; }
+.duel-sum b { font-weight: 600; }
+
+/* zoeken */
+.q-out { display: grid; gap: 1.5rem; }
+.q-out .hits { display: grid; max-width: 44rem; border-top: 1px solid var(--line); }
+.q-out a.hit { border-bottom: 1px solid var(--line); }
+
+/* tekstpagina */
+.prose { display: grid; gap: .75rem; max-width: 42rem; }
+.prose h2 { margin-top: .75rem; }
+.prose ul { margin: 0; padding-left: 1.2rem; }
+
+/* voet */
+.foot { color: var(--mut); font-size: .88rem; border-top: 1px solid var(--line); }
+.foot .wrap { padding-block: 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px)); }
+.foot a { color: var(--mut); text-decoration: underline; }
+
+@media (max-width: 40rem) {
+  .year { grid-template-columns: 1fr; }
+  .qs { margin-left: 0; flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }

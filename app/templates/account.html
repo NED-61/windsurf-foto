@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titel %}Account{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>{{ user.name }}</h1>
+<p class="lede">{{ user.email }}{% if not user.email_verified %} (nog niet bevestigd){% endif %}.
+{% if user.role == 'admin' %}Beheerder.{% elif user.person_id %}Gekoppeld aan rider <a href="{{ cfg.SITE_URL }}/rider/{{ user.person_id }}.html">{{ rider_naam(user.person_id) }}</a>; je foto's zijn direct zichtbaar.{% elif user.trusted %}Vertrouwd account: je foto's zijn direct zichtbaar.{% else %}Nieuw account: je foto's worden eerst door de beheerder bekeken.{% endif %}</p></header>
+
+<section class="block">
+  <div class="block-h"><h2>Ridernaam</h2></div>
+  {% if user.person_id %}
+  <p>Je account is gekoppeld aan {{ rider_naam(user.person_id) }}.</p>
+  {% elif claim and claim.status == 'wacht' %}
+  <p>Je claim op <strong>{{ rider_naam(claim.person_id) }}</strong> wacht op de beheerder (ingediend {{ claim.created_at|datum }}).</p>
+  {% else %}
+  {% if claim and claim.status == 'afgewezen' %}<p class="muted small">Je eerdere claim op {{ rider_naam(claim.person_id) }} is niet goedgekeurd{% if claim.decision_note %}: {{ claim.decision_note }}{% endif %}.</p>{% endif %}
+  <p>Ben je zelf rider en sta je in het archief? <a href="/claim">Claim je ridernaam</a>, dan staan je foto's voortaan direct online en kun je straks foto's van jezelf beheren.</p>
+  {% endif %}
+</section>
+
+{% if not user.email_verified %}
+<section class="block">
+  <div class="block-h"><h2>E-mailadres bevestigen</h2></div>
+  <form class="form inline" method="post" action="/account/bevestiging-opnieuw"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" type="submit">Stuur de bevestigingsmail opnieuw</button></form>
+</section>
+{% endif %}
+
+<section class="block">
+  <div class="block-h"><h2>Jouw foto's</h2><a href="/upload">Foto's toevoegen</a></div>
+  {% if n_fotos == 0 %}<p class="muted">Nog geen foto's geplaatst.</p>{% endif %}
+  {% for slug, fotos in per_event.items() %}
+  <h3><a href="/wedstrijd/{{ slug }}">{{ event_naam(slug) }}</a> <small class="muted">{{ fotos|length }}</small></h3>
+  {% with fotos=fotos, status=True %}{% include "_grid.html" %}{% endwith %}
+  {% endfor %}
+</section>
+
+<section class="block">
+  <div class="block-h"><h2>Instellingen</h2></div>
+  <form class="form smal" method="post" action="/account/naam">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Naam bij je foto's <input name="naam" required minlength="2" maxlength="60" value="{{ user.name }}"></label>
+    <p><button class="btn btn-stil" type="submit">Naam wijzigen</button></p>
+  </form>
+  <form class="form smal" method="post" action="/account/wachtwoord">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Huidig wachtwoord <input name="huidig" type="password" required autocomplete="current-password"></label>
+    <label>Nieuw wachtwoord <input name="wachtwoord" type="password" required minlength="10" autocomplete="new-password"></label>
+    <label>Nog een keer <input name="wachtwoord2" type="password" required minlength="10" autocomplete="new-password"></label>
+    <p><button class="btn btn-stil" type="submit">Wachtwoord wijzigen</button></p>
+  </form>
+  <form class="form inline" method="post" action="/uitloggen"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-stil" type="submit">Uitloggen</button></form>
+</section>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titel %}{{ titel }}{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>{{ titel }}</h1></header>
+<div class="prose">
+  <p>{{ tekst }}</p>
+  <p><a href="{{ link or '/' }}">{{ linktekst or 'Terug naar de foto\'s' }}</a></p>
+</div>
+{% endblock %}

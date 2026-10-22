@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titel %}Foto's uploaden{% endblock %}
+{% block inhoud %}
+<header class="ph"><h1>Foto's uploaden</h1>
+<p class="lede">Kies de wedstrijd, sleep je foto's erin, klaar. Bijschriften en wie erop staat kun je daarna per foto invullen.</p></header>
+{% if user.blocked %}
+<p class="fout">Dit account is geblokkeerd; uploaden kan niet.</p>
+{% elif not user.email_verified %}
+<p class="fout">Bevestig eerst je e-mailadres (zie je mail, of <a href="/account">vraag een nieuwe bevestigingsmail aan</a>).</p>
+{% elif archief_leeg %}
+<p class="fout">De lijst met wedstrijden is op dit moment niet beschikbaar. Probeer het over een paar minuten nog eens.</p>
+{% else %}
+<div class="upload" id="upload" data-slug="{{ slug }}" data-naam="{{ ev.name if ev else '' }}" data-direct="{{ 1 if mag_direct else 0 }}">
+  <section class="block">
+    <div class="block-h"><h2>1. Wedstrijd</h2></div>
+    <div id="ev-gekozen" class="gekozen"{% if not ev %} hidden{% endif %}>
+      <p><strong id="ev-naam">{{ ev.name if ev else '' }}</strong> <span id="ev-meta" class="muted small">{% if ev and ev.date %}{{ ev.date|datum }}{% if ev.date_end %} tot {{ ev.date_end|datum }}{% endif %}{% endif %}{% if ev and ev.location %}, {{ ev.location }}{% endif %}</span> <button type="button" class="link" id="ev-anders">andere wedstrijd</button></p>
+    </div>
+    <div id="ev-kiezen"{% if ev %} hidden{% endif %}>
+      <label class="vh" for="ev-q">Zoek de wedstrijd</label>
+      <input id="ev-q" type="search" autocomplete="off" placeholder="Zoek op naam, jaar of plaats, bijvoorbeeld 'NK slalom 2024'">
+      <div id="ev-hits" class="hits"></div>
+      <p class="small muted">Staat de wedstrijd er niet bij? Dan staat de uitslag nog niet in het archief; meld het via de over-pagina van de site.</p>
+    </div>
+  </section>
+  <section class="block">
+    <div class="block-h"><h2>2. Over deze foto's</h2></div>
+    <form class="form" id="opties" onsubmit="return false">
+      <label>Fotograaf <input name="fotograaf" maxlength="100" value="{{ user.name }}"></label>
+      <label>Licentie <select name="licentie">{% for k, v in LICENTIES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      <label class="check"><input type="checkbox" name="toestemming" value="ja"> Ik heb deze foto's zelf gemaakt, of ik heb toestemming van de fotograaf om ze hier te plaatsen.</label>
+      <p class="small muted">{% if mag_direct %}Je foto's staan direct op de site.{% else %}Je foto's komen eerst in de wachtrij; de beheerder kijkt er naar en dan staan ze op de site. Als nieuw account kun je {{ cfg.DAGLIMIET_NIEUW }} foto's per dag uploaden.{% endif %} GPS-gegevens worden uit de verkleinde versies gehaald; het origineel bewaren we ongewijzigd.</p>
+    </form>
+  </section>
+  <section class="block">
+    <div class="block-h"><h2>3. Foto's</h2></div>
+    <div class="drop" id="drop" tabindex="0">
+      <p>Sleep foto's hierheen, of <label class="link" for="bestanden">kies bestanden</label>.</p>
+      <p class="small muted">JPEG, PNG, WebP of HEIC, tot {{ cfg.MAX_UPLOAD_MB }} MB per foto. Tientallen tegelijk mag.</p>
+      <input id="bestanden" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple hidden>
+    </div>
+    <ul class="uploads" id="uploads"></ul>
+  </section>
+  <section class="block" id="klaar-blok" hidden>
+    <div class="block-h"><h2>Geüpload</h2><a id="naar-wedstrijd" href="#">Naar de wedstrijd</a></div>
+    <p class="small muted">Klik op een foto voor een bijschrift of om hem te verwijderen.</p>
+    <div class="fotos-grid" id="klaar"></div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}
+{% block script %}<script defer src="/static/upload.js?v={{ cfg.VERSIE }}"></script>{% endblock %}

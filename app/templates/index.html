@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titel %}Foto's{% endblock %}
+{% block robots %}{% endblock %}
+{% block inhoud %}
+<header class="ph">
+  <h1>Foto's bij het archief</h1>
+  <p class="lede">{{ totaal }} foto's van {{ wedstrijden|length }} wedstrijden, geplaatst door riders en fotografen. De foto's staan ook bij de uitslagen op <a href="{{ cfg.SITE_URL }}/">de archiefsite</a>.</p>
+</header>
+{% if nieuw %}
+<section class="block">
+  <div class="block-h"><h2>Nieuwste foto's</h2></div>
+  {% with fotos=nieuw %}{% include "_grid.html" %}{% endwith %}
+</section>
+{% endif %}
+<section class="block">
+  <div class="block-h"><h2>Wedstrijden met foto's</h2></div>
+  {% if wedstrijden %}
+  <ul class="evs">
+  {% for w in wedstrijden %}<li class="ev"><div class="ev-h"><a class="ev-name" href="/wedstrijd/{{ w.slug }}">{{ w.naam }}</a><span class="ev-meta">{{ w.n }} foto's</span></div></li>{% endfor %}
+  </ul>
+  {% else %}<p class="muted">Nog geen foto's. Heb jij er? <a href="/upload">Upload ze bij een wedstrijd.</a></p>{% endif %}
+</section>
+<section class="block prose">
+  <h2>Zelf foto's toevoegen</h2>
+  <p>Iedereen die foto's heeft van een wedstrijd uit het archief kan ze hier plaatsen: maak een account, kies de wedstrijd en sleep de foto's erin. Ben je zelf rider, claim dan je naam op je accountpagina; daarna staan je foto's direct online. Nieuwe accounts komen eerst even langs de beheerder.</p>
+  <p><a class="btn" href="/upload">Foto's uploaden</a></p>
+</section>
+{% endblock %}

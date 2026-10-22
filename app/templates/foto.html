@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titel %}Foto {{ f.id }}, {{ event_naam(f.event_slug) }}{% endblock %}
+{% block robots %}{% if f.status == 'zichtbaar' %}{% else %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
+{% block inhoud %}
+<nav class="crumbs" aria-label="Kruimelpad"><a href="/">Foto's</a><span aria-hidden="true">/</span><a href="/wedstrijd/{{ f.event_slug }}">{{ event_naam(f.event_slug) }}</a><span aria-hidden="true">/</span><span>Foto {{ f.id }}</span></nav>
+<article class="foto-detail">
+  <figure>
+    <img src="{{ fj.m }}" width="{{ f.width }}" height="{{ f.height }}" alt="{{ f.caption or ('Foto ' ~ f.id) }}">
+    <figcaption>
+      {% if f.caption %}<p class="caption">{{ f.caption }}</p>{% endif %}
+      <p class="small muted">Foto: {{ f.credit or uploader.name }}{% if f.taken_at %}, {{ f.taken_at|dt }}{% endif %}. {{ LICENTIES[f.licence] }}. Geplaatst door {{ uploader.name }} op {{ f.uploaded_at|datum }}.
+      {% if f.status != 'zichtbaar' %}<span class="badge badge-{{ f.status }}">{{ f.status }}</span>{% if f.status_reason %} ({{ f.status_reason }}){% endif %}{% endif %}</p>
+      {% if orig and (f.orig_public or eigenaar or (user and user.role == 'admin')) %}<p class="small"><a href="/o/{{ f.id }}">Origineel downloaden</a> ({{ f.size|mb }}, {{ f.width }} × {{ f.height }})</p>{% endif %}
+    </figcaption>
+  </figure>
+  <nav class="buren">
+    {% if vorige %}<a href="/foto/{{ vorige }}" rel="prev">Vorige</a>{% else %}<span></span>{% endif %}
+    <a href="/wedstrijd/{{ f.event_slug }}">Alle foto's van {{ event_naam(f.event_slug) }}</a>
+    {% if volgende %}<a href="/foto/{{ volgende }}" rel="next">Volgende</a>{% else %}<span></span>{% endif %}
+  </nav>
+</article>
+
+<section class="block">
+  <div class="block-h"><h2>Wie staat erop?</h2></div>
+  {% if tags %}<ul class="tags">{% for t in tags %}<li>{% if t.person_id %}<a href="{{ cfg.SITE_URL }}/rider/{{ t.person_id }}.html">{{ rider_naam(t.person_id) }}</a>{% else %}{{ t.name }}{% endif %}{% if t.status == 'wacht' %} <span class="badge badge-wacht">wacht</span>{% endif %}</li>{% endfor %}</ul>
+  {% else %}<p class="muted small">Nog niemand getagd. Taggen komt in de volgende fase van de site.</p>{% endif %}
+</section>
+
+{% if eigenaar or (user and user.role == 'admin') %}
+<section class="block">
+  <div class="block-h"><h2>Bewerken</h2></div>
+  <form class="form" method="post" action="/api/foto/{{ f.id }}" data-fetch="1">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Bijschrift <input name="bijschrift" maxlength="300" value="{{ f.caption or '' }}" placeholder="Bijvoorbeeld: finale heren, eerste boei"></label>
+    <label>Fotograaf <input name="fotograaf" maxlength="100" value="{{ f.credit or '' }}"></label>
+    <label>Licentie <select name="licentie">{% for k, v in LICENTIES.items() %}<option value="{{ k }}"{% if k == f.licence %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label class="check"><input type="checkbox" name="origineel_vrij" value="1"{% if f.orig_public %} checked{% endif %}> Het origineel mag iedereen downloaden</label>
+    <p><button class="btn" type="submit">Opslaan</button> <span class="form-uit small muted"></span></p>
+  </form>
+  <form class="form inline" method="post" action="/api/foto/{{ f.id }}/verwijder" data-fetch="1" data-bevestig="Deze foto verwijderen? Het origineel blijft bewaard bij de beheerder, maar de foto verdwijnt van de site." data-daarna="/wedstrijd/{{ f.event_slug }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-stil" type="submit">Foto verwijderen</button>
+  </form>
+</section>
+{% endif %}
+
+{% if user and user.role == 'admin' %}
+<section class="block beheer-acties">
+  <div class="block-h"><h2>Beheer</h2></div>
+  <form class="form inline" method="post" action="/beheer/foto/{{ f.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/foto/{{ f.id }}"><button class="btn" type="submit"{% if f.status == 'zichtbaar' %} disabled{% endif %}>Goedkeuren</button></form>
+  <form class="form inline" method="post" action="/beheer/foto/{{ f.id }}/verbergen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/foto/{{ f.id }}"><input name="reden" placeholder="reden (gaat naar de uploader)"><button class="btn btn-stil" type="submit">Verbergen</button></form>
+  {% if meldingen %}<ul class="notes small">{% for m in meldingen %}<li>Gemeld op {{ m.created_at|dt }} door {{ m.uname or 'anoniem' }}: {{ m.reason }}{% if m.handled_at %} (afgehandeld){% endif %}</li>{% endfor %}</ul>{% endif %}
+</section>
+{% endif %}
+
+{% if f.status == 'zichtbaar' %}
+<section class="block">
+  <details>
+    <summary class="small">Klopt er iets niet aan deze foto? Meld het.</summary>
+    <form class="form" method="post" action="/foto/{{ f.id }}/melden">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Wat is er aan de hand? <input name="reden" required minlength="3" maxlength="500" placeholder="Bijvoorbeeld: dit ben ik en ik wil deze foto niet online"></label>
+      <p><button class="btn btn-stil" type="submit">Melden</button></p>
+    </form>
+  </details>
+</section>
+{% endif %}
+{% endblock %}

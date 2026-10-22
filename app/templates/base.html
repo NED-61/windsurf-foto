@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block titel %}Foto's{% endblock %} | Windsurf Wedstrijdarchief</title>
+<meta name="description" content="{% block omschrijving %}Foto's bij de uitslagen van het Windsurf Wedstrijdarchief.{% endblock %}">
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+<meta name="csrf" content="{{ csrf }}">
+<link rel="stylesheet" href="/static/site.css?v={{ cfg.VERSIE }}">
+<link rel="stylesheet" href="/static/foto.css?v={{ cfg.VERSIE }}">
+</head>
+<body data-root="/">
+<a class="skip" href="#main">Naar de inhoud</a>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="{{ cfg.SITE_URL }}/">Windsurf<span>Wedstrijdarchief</span></a>
+    <nav class="nav" aria-label="Hoofdmenu">
+      <a href="/"{% if request.url.path == '/' %} aria-current="page"{% endif %}>Foto's</a>
+      <a href="/upload"{% if request.url.path.startswith('/upload') %} aria-current="page"{% endif %}>Uploaden</a>
+      {% if user %}
+      <a href="/account"{% if request.url.path.startswith('/account') or request.url.path.startswith('/claim') %} aria-current="page"{% endif %}>{{ user.name }}</a>
+      {% if user.role == 'admin' %}<a href="/beheer"{% if request.url.path.startswith('/beheer') %} aria-current="page"{% endif %}>Beheer{% if wachtrij_n %} <span class="pill">{{ wachtrij_n }}</span>{% endif %}</a>{% endif %}
+      {% else %}
+      <a href="/inloggen">Inloggen</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap">
+{% if bericht %}<p class="flash" role="status">{{ bericht }}</p>{% endif %}
+{% if user and user.blocked %}<p class="flash warn">Dit account is geblokkeerd{% if user.blocked_reason %}: {{ user.blocked_reason }}{% endif %}. Je kunt kijken, maar niets toevoegen.</p>
+{% elif user and not user.email_verified %}<p class="flash warn">Je e-mailadres is nog niet bevestigd. Kijk in je mail (ook de spam), of <a href="/account">vraag een nieuwe bevestigingsmail aan</a>.</p>{% endif %}
+{% block inhoud %}{% endblock %}
+</main>
+<footer class="foot">
+  <div class="wrap">
+    <p>Foto's van riders en fotografen, geplaatst met hun toestemming. Staat er iets dat niet hoort? Meld het bij de foto. <a href="{{ cfg.SITE_URL }}/over.html">Over dit archief</a></p>
+  </div>
+</footer>
+<script defer src="/static/galerij.js?v={{ cfg.VERSIE }}"></script>
+{% block script %}{% endblock %}
+</body>
+</html>
