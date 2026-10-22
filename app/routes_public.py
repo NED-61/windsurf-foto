@@ -53,7 +53,7 @@ def api_export(slug: str):
     uit = []
     for r in web.zichtbare_fotos("event_slug=?", slug):
         up = db.one("SELECT name FROM users WHERE id=?", r["uploader_id"])
-        uit.append({"file": f"nas:{r['key']}", "type": "foto", "sha256": r["sha256"], "caption": r["caption"], "credit": r["credit"] or (up["name"] if up else None),
+        uit.append({"file": f"nas:{r['orig_rel'] or r['key']}", "type": "foto", "sha256": r["sha256"], "caption": r["caption"], "credit": r["credit"] or (up["name"] if up else None),
                     "rights": RECHTEN.get(r["licence"], r["licence"]), "source_url": f"{config.APP_URL}/foto/{r['id']}",
                     "people": [t["person_id"] for t in web.zichtbare_tags(r["id"]) if t["person_id"]], "classes": [], "in_repo": False,
                     "reason": f"staat op de NAS (windsurf-foto, foto {r['id']}); origineel {r['ext']}, {r['size']} bytes" + (f", opname {r['taken_at']}" if r["taken_at"] else ""),
@@ -117,10 +117,9 @@ def origineel(request: Request, foto_id: int):
     u = auth.current_user(request)
     mag = (r["status"] == "zichtbaar" and r["orig_public"]) or (u and (auth.is_admin(u) or u["id"] == r["uploader_id"]))
     if not mag: raise HTTPException(403, "Het origineel van deze foto is niet vrij te downloaden.")
-    p = images.orig_path(r["sha256"], r["ext"])
+    p = images.orig_path(r)
     if not p.exists(): raise HTTPException(404, "Origineel ontbreekt")
-    naam = f"{r['event_slug']}-{r['id']}.{r['ext']}"
-    return FileResponse(p, filename=naam, headers=PRIVAAT)
+    return FileResponse(p, filename=p.name, headers=PRIVAAT)
 
 
 # ---------------------------------------------------------------- pagina's
@@ -169,7 +168,7 @@ def foto(request: Request, foto_id: int):
     meldingen = db.all_("SELECT r.*, u.name uname FROM reports r LEFT JOIN users u ON u.id=r.user_id WHERE photo_id=? ORDER BY id DESC", foto_id) if auth.is_admin(u) else []
     mag_taggen = bool(u and u["email_verified"] and not u["blocked"] and r["status"] == "zichtbaar")
     return web.render(request, "foto.html", f=r, fj=web.foto_json(r, met_status=True), uploader=up, eigenaar=eigenaar, vorige=vorige, volgende=volgende,
-                      tags=tags, mag_taggen=mag_taggen, meldingen=meldingen, ev=archive.event(r["event_slug"]), orig=images.orig_path(r["sha256"], r["ext"]).exists())
+                      tags=tags, mag_taggen=mag_taggen, meldingen=meldingen, ev=archive.event(r["event_slug"]), orig=images.orig_path(r).exists())
 
 
 @router.post("/foto/{foto_id}/melden")

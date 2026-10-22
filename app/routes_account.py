@@ -282,10 +282,11 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
             return JSONResponse({"fout": "Deze foto staat er al" + (" (bij een andere wedstrijd)" if dup["event_slug"] != wedstrijd else "") + ".", "dubbel": web.foto_json(dup, met_status=True)}, status_code=409)
         if dup:   # eerder verwijderd: de oude regel gaat weg, de log houdt de geschiedenis
             db.db().execute("DELETE FROM photos WHERE id=?", (dup["id"],))
-            oud = config.ORIG_DIR / "verwijderd" / f"{sha}.{dup['ext']}"
+            oud = config.ORIG_DIR / "verwijderd" / images.orig_path(dup).name
             if oud.exists(): oud.unlink()
         key = sha[:16]
-        orig = images.orig_path(sha, ext)
+        rel = images.orig_rel(wedstrijd, ev.get("year"), images.opnamedatum_van(tmp), sha, ext)
+        orig = config.ORIG_DIR / rel
         orig.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(tmp), str(orig))
     finally:
@@ -298,8 +299,8 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
     status = "zichtbaar" if direct else "wacht"
     credit = " ".join(fotograaf.split())[:100] or u["name"]
     cur = db.db().execute(
-        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,status,status_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (key, wedstrijd, u["id"], sha, ext, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, status, db.now()))
+        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,status,status_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (key, wedstrijd, u["id"], sha, ext, rel, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, status, db.now()))
     fid = cur.lastrowid
     db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {bestand.filename}; {grootte} bytes")
     if status == "wacht": _wachtrij_melding()
@@ -344,7 +345,7 @@ def foto_verwijderen(request: Request, foto_id: int, csrf: str = Form("")):
 def verwijder_foto(r, door, reden):
     """Zet de status op verwijderd, haalt de verkleinde versies weg en zet het origineel in ORIG_DIR/verwijderd/ (niets gaat echt weg)."""
     images.verwijder_verkleind(r["key"])
-    p = images.orig_path(r["sha256"], r["ext"])
+    p = images.orig_path(r)
     if p.exists():
         doel = config.ORIG_DIR / "verwijderd"; doel.mkdir(parents=True, exist_ok=True)
         shutil.move(str(p), str(doel / p.name))

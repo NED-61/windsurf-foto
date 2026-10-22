@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS photos (
   uploader_id INTEGER NOT NULL,
   sha256 TEXT NOT NULL UNIQUE,
   ext TEXT NOT NULL,
+  orig_rel TEXT,                             -- pad van het origineel binnen ORIG_DIR: <jaar>/<wedstrijd>/<wedstrijd>_<opname>_<sha8>.<ext>
   orig_name TEXT,
   size INTEGER, width INTEGER, height INTEGER,
   taken_at TEXT,
@@ -127,6 +128,8 @@ def _migreer(con):
     """Kolommen die na versie 0.2 zijn toegevoegd, voor een database die al bestond."""
     kol = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
     if "hide_profile" not in kol: con.execute("ALTER TABLE users ADD COLUMN hide_profile INTEGER NOT NULL DEFAULT 0")
+    kol = {r["name"] for r in con.execute("PRAGMA table_info(photos)")}
+    if "orig_rel" not in kol: con.execute("ALTER TABLE photos ADD COLUMN orig_rel TEXT")
 
 
 def reset():

@@ -181,15 +181,38 @@ def test_bewerken_verwijderen_melden(omgeving):
     assert r.status_code == 200 and "doorgegeven" in r.text
     a = admin_client(omgeving)
     assert "liever niet online" in a.get("/beheer?tab=meldingen").text
-    # verwijderen door de uploader: weg van de site, origineel naar verwijderd/
-    sha = db.one("SELECT sha256, ext FROM photos WHERE id=?", f["id"])
+    # het origineel staat in <jaar>/<wedstrijd>/ met de opnamedatum en 8 tekens hash in de naam, byte-identiek
+    row = db.one("SELECT sha256, ext, orig_rel FROM photos WHERE id=?", f["id"])
+    assert row["orig_rel"] == f"2024/nk-slalom-2024/nk-slalom-2024_20240615-120000_{row['sha256'][:8]}.jpg"
+    orig = pathlib.Path(config.ORIG_DIR) / row["orig_rel"]
+    assert orig.exists() and __import__("hashlib").sha256(orig.read_bytes()).hexdigest() == row["sha256"]
+    assert anoniem.get(f"/o/{f['id']}").headers["content-disposition"].endswith(f'{orig.name}"')
+    # verwijderen door de uploader: weg van de site, origineel naar verwijderd/ met dezelfde naam
     r = c.post(f"/api/foto/{f['id']}/verwijder", data={"csrf": csrf_van(c, "/account")})
     assert r.json()["ok"] is True
     assert anoniem.get(f"/foto/{f['id']}").status_code == 404
     assert anoniem.get(f"/i/{f['key']}/t.jpg").status_code == 404
-    assert (pathlib.Path(config.ORIG_DIR) / "verwijderd" / f"{sha['sha256']}.{sha['ext']}").exists()
+    assert not orig.exists() and (pathlib.Path(config.ORIG_DIR) / "verwijderd" / orig.name).exists()
     # dezelfde foto opnieuw uploaden mag daarna weer
     assert upload(c, "nk-slalom-2024", jpeg((10, 20, 30))).status_code == 200
+    assert orig.exists()
+
+
+def test_migratie_oude_indeling(omgeving):
+    """Een origineel dat nog op hash staat (versie 0.2) wordt bij de migratie naar <jaar>/<wedstrijd>/ verplaatst."""
+    c, db, config = omgeving["c"], omgeving["db"], omgeving["config"]
+    from app import images
+    u = registreer_en_bevestig(c, db, "lid@example.org", "Lid")
+    f = upload(c, "nk-slalom-2024", jpeg((33, 44, 55))).json()["foto"]
+    row = db.one("SELECT * FROM photos WHERE id=?", f["id"])
+    nieuw = pathlib.Path(config.ORIG_DIR) / row["orig_rel"]
+    oud = images.orig_hash_path(row["sha256"], row["ext"]); oud.parent.mkdir(parents=True, exist_ok=True)
+    nieuw.rename(oud)
+    db.db().execute("UPDATE photos SET orig_rel=NULL WHERE id=?", (f["id"],))
+    assert images.migreer_originelen(lambda slug: 2024) == 1
+    assert nieuw.exists() and not oud.exists()
+    assert db.one("SELECT orig_rel FROM photos WHERE id=?", f["id"])["orig_rel"] == row["orig_rel"]
+    assert images.migreer_originelen(lambda slug: None) == 0
 
 
 def test_blokkeren_verbergt_alles(omgeving):

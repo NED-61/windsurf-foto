@@ -56,8 +56,30 @@ def derived_dir(key: str) -> Path:
     return config.DERIVED_DIR / key[:2] / key
 
 
-def orig_path(sha: str, ext: str) -> Path:
+def orig_rel(slug: str, jaar, taken_at, sha: str, ext: str) -> str:
+    """Pad van een origineel binnen ORIG_DIR, zodat de foto's ook op de NAS zelf terug te vinden zijn:
+    <jaar>/<wedstrijd>/<wedstrijd>_<opnamedatum-tijd>_<sha8>.<ext>, bijvoorbeeld 2024/nk-slalom-2024/nk-slalom-2024_20241019-143512_a874401b.jpg."""
+    veilig = "".join(c if c.isalnum() or c in "-_" else "-" for c in slug)[:80] or "onbekend"
+    opname = (taken_at or "")[:19].replace("-", "").replace(":", "").replace("T", "-") or "geen-datum"
+    return f"{jaar or 'onbekend'}/{veilig}/{veilig}_{opname}_{sha[:8]}.{ext}"
+
+
+def orig_hash_path(sha: str, ext: str) -> Path:
+    """De oude indeling (tot versie 0.3): op hash. Alleen nog voor de migratie."""
     return config.ORIG_DIR / sha[:2] / f"{sha}.{ext}"
+
+
+def orig_path(r) -> Path:
+    """Het origineel van een foto-regel uit de database (nieuwe indeling, anders de oude op hash)."""
+    if r["orig_rel"]: return config.ORIG_DIR / r["orig_rel"]
+    return orig_hash_path(r["sha256"], r["ext"])
+
+
+def opnamedatum_van(path: Path):
+    try:
+        with Image.open(path) as im: return opnamedatum(im)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def maak_verkleind(src: Path, key: str) -> dict:
@@ -81,6 +103,27 @@ def verwijder_verkleind(key: str):
     for f in ("t.jpg", "m.jpg"):
         p = d / f
         if p.exists(): p.unlink()
+
+
+def migreer_originelen(jaar_van) -> int:
+    """Zet originelen die nog in de oude indeling (op hash) staan om naar <jaar>/<wedstrijd>/... en vult orig_rel. Geeft het aantal verplaatste bestanden.
+    jaar_van(slug) geeft het jaar van een wedstrijd (None als onbekend: dan wacht die foto tot de archieflijst er is)."""
+    from . import db
+    import shutil
+    n = 0
+    for r in db.all_("SELECT * FROM photos WHERE orig_rel IS NULL AND status!='verwijderd'"):
+        jaar = jaar_van(r["event_slug"])
+        if not jaar: continue
+        oud = orig_hash_path(r["sha256"], r["ext"])
+        if not oud.exists(): continue
+        rel = orig_rel(r["event_slug"], jaar, r["taken_at"], r["sha256"], r["ext"])
+        nieuw = config.ORIG_DIR / rel
+        nieuw.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(oud), str(nieuw))
+        db.db().execute("UPDATE photos SET orig_rel=? WHERE id=?", (rel, r["id"]))
+        n += 1
+    if n: db.log("originelen.verplaatst", detail=f"{n} bestanden naar <jaar>/<wedstrijd>/")
+    return n
 
 
 # ---------------------------------------------------------------- testset voor de meting in F0

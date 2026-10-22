@@ -26,7 +26,16 @@ def opstart():
     _zorg_admin()
     if os.environ.get("TESTSET", "1") == "1":
         threading.Thread(target=images.maak_testset, daemon=True).start()
-    threading.Thread(target=lambda: archive.events(), daemon=True).start()
+    threading.Thread(target=_archief_en_migratie, daemon=True).start()
+
+
+def _archief_en_migratie():
+    """Archieflijst laden en daarna originelen uit de oude indeling (op hash) verplaatsen naar <jaar>/<wedstrijd>/."""
+    archive.events()
+    try:
+        images.migreer_originelen(lambda slug: (archive.event(slug) or {}).get("year"))
+    except Exception as e:  # noqa: BLE001
+        db.log("originelen.migratie_fout", detail=str(e)[:300])
 
 
 @asynccontextmanager

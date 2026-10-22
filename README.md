@@ -73,3 +73,5 @@ tests/test_app.py      de hele keten in een tijdelijke map
 ```
 
 Statussen van een foto: `wacht` (wachtrij), `zichtbaar`, `verborgen` (door beheer, met reden), `verwijderd` (door uploader of beheer; het origineel staat dan in `ORIG_DIR/verwijderd/`). Er wordt nooit iets echt weggegooid.
+
+Originelen staan op de NAS zo dat je ze ook zonder de dienst terugvindt: `ORIG_DIR/<jaar>/<wedstrijd>/<wedstrijd>_<opnamedatum-tijd>_<8 tekens sha256>.<ext>`, bijvoorbeeld `2024/nk-slalom-2024/nk-slalom-2024_20241019-143512_a874401b.jpg` (`geen-datum` als de foto geen EXIF-datum heeft). Op naam gesorteerd staan ze op tijd. Het pad staat in de database (`orig_rel`); bestanden uit versie 0.2 (op hash) worden bij het opstarten verplaatst zodra de archieflijst geladen is. De verkleinde versies op de SSD blijven op hash: dat is cache, opnieuw te maken uit de originelen.
