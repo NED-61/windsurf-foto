@@ -248,12 +248,25 @@ def _datum_waarschuwing(taken_at, ev):
     return None
 
 
+def herkomst_check(herkomst, fotograaf, licentie, naam_uploader):
+    """Geeft (herkomst, credit, licentie) of een foutmelding. Bij een onbekende fotograaf kan alleen 'alleen op dit archief':
+    je kunt geen Creative Commons weggeven op andermans foto."""
+    if herkomst not in config.HERKOMST: raise HTTPException(400, "Geef aan wie de foto's heeft gemaakt.")
+    if licentie not in config.LICENTIES: raise HTTPException(400, "Onbekende licentie.")
+    fotograaf = " ".join(fotograaf.split())[:100]
+    if herkomst == "eigen": return herkomst, fotograaf or naam_uploader, licentie
+    if herkomst == "toestemming":
+        if len(fotograaf) < 2: raise HTTPException(400, "Vul de naam van de fotograaf in.")
+        return herkomst, fotograaf, licentie
+    return herkomst, None, "archief"
+
+
 @router.post("/api/upload")
 async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str = Form("archief"), fotograaf: str = Form(""), toestemming: str = Form(""),
-                     csrf: str = Form(""), bestand: UploadFile = File(...)):
+                     herkomst: str = Form("eigen"), csrf: str = Form(""), bestand: UploadFile = File(...)):
     u = auth.require_verified(request); auth.check_csrf(request, csrf)
-    if toestemming != "ja": raise HTTPException(400, "Vink aan dat je de foto's zelf hebt gemaakt of mag delen.")
-    if licentie not in config.LICENTIES: raise HTTPException(400, "Onbekende licentie.")
+    if toestemming != "ja": raise HTTPException(400, "Vink de verklaring over de foto's aan.")
+    herkomst, credit, licentie = herkomst_check(herkomst, fotograaf, licentie, u["name"])
     ev = archive.event(wedstrijd)
     if not ev:
         raise HTTPException(503 if not archive.events() else 400, "De wedstrijdenlijst is nu niet beschikbaar, probeer het straks nog eens." if not archive.events() else "Onbekende wedstrijd.")
@@ -297,12 +310,11 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
         orig.unlink(missing_ok=True); images.verwijder_verkleind(key)
         raise HTTPException(415, f"De foto kon niet verwerkt worden ({type(e).__name__}).")
     status = "zichtbaar" if direct else "wacht"
-    credit = " ".join(fotograaf.split())[:100] or u["name"]
     cur = db.db().execute(
-        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,status,status_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (key, wedstrijd, u["id"], sha, ext, rel, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, status, db.now()))
+        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,rights_basis,status,status_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (key, wedstrijd, u["id"], sha, ext, rel, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, herkomst, status, db.now()))
     fid = cur.lastrowid
-    db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {bestand.filename}; {grootte} bytes")
+    db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {herkomst}; {bestand.filename}; {grootte} bytes")
     if status == "wacht": _wachtrij_melding()
     row = db.one("SELECT * FROM photos WHERE id=?", fid)
     return {"ok": True, "foto": web.foto_json(row, met_status=True), "waarschuwing": _datum_waarschuwing(info["taken_at"], ev)}
@@ -326,11 +338,13 @@ def _eigen_of_admin(request, foto_id):
 
 
 @router.post("/api/foto/{foto_id}")
-def foto_bewerken(request: Request, foto_id: int, bijschrift: str = Form(""), fotograaf: str = Form(""), licentie: str = Form("archief"), origineel_vrij: str = Form(""), csrf: str = Form("")):
+def foto_bewerken(request: Request, foto_id: int, bijschrift: str = Form(""), fotograaf: str = Form(""), licentie: str = Form("archief"), herkomst: str = Form(""),
+                  origineel_vrij: str = Form(""), csrf: str = Form("")):
     u, r = _eigen_of_admin(request, foto_id); auth.check_csrf(request, csrf)
-    if licentie not in config.LICENTIES: raise HTTPException(400, "Onbekende licentie.")
-    db.db().execute("UPDATE photos SET caption=?, credit=?, licence=?, orig_public=? WHERE id=?",
-                    (" ".join(bijschrift.split())[:300] or None, " ".join(fotograaf.split())[:100] or None, licentie, 1 if origineel_vrij in ("1", "ja", "on") else 0, foto_id))
+    up = db.one("SELECT name FROM users WHERE id=?", r["uploader_id"])
+    herkomst, credit, licentie = herkomst_check(herkomst or r["rights_basis"], fotograaf, licentie, up["name"] if up else u["name"])
+    db.db().execute("UPDATE photos SET caption=?, credit=?, licence=?, rights_basis=?, orig_public=? WHERE id=?",
+                    (" ".join(bijschrift.split())[:300] or None, credit, licentie, herkomst, 1 if origineel_vrij in ("1", "ja", "on") else 0, foto_id))
     db.log("foto.bewerkt", u["id"], photo_id=foto_id, event_slug=r["event_slug"])
     return {"ok": True, "foto": web.foto_json(db.one("SELECT * FROM photos WHERE id=?", foto_id), met_status=True)}
 

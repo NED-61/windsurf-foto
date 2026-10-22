@@ -34,7 +34,7 @@ def fmt_bytes(n):
 templates.env.filters["dt"] = fmt_dt
 templates.env.filters["datum"] = lambda s: fmt_dt(s, met_tijd=False)
 templates.env.filters["mb"] = fmt_bytes
-templates.env.globals.update(cfg=config, LICENTIES=config.LICENTIES, event_naam=archive.event_naam, rider_naam=archive.rider_naam)
+templates.env.globals.update(cfg=config, LICENTIES=config.LICENTIES, HERKOMST=config.HERKOMST, event_naam=archive.event_naam, rider_naam=archive.rider_naam)
 
 
 def render(request: Request, naam: str, status_code: int = 200, **ctx):
@@ -62,7 +62,8 @@ def foto_json(r, met_status=False) -> dict:
     tw, th = thumb_maat(r["width"], r["height"])
     d = {"id": r["id"], "key": r["key"], "wedstrijd": r["event_slug"],
          "t": f"{base}/i/{r['key']}/t.jpg", "m": f"{base}/i/{r['key']}/m.jpg", "w": r["width"], "h": r["height"], "tw": tw, "th": th,
-         "caption": r["caption"] or "", "credit": r["credit"] or "", "licence": r["licence"], "taken_at": r["taken_at"],
+         "caption": r["caption"] or "", "credit": r["credit"] or ("fotograaf onbekend" if r["rights_basis"] == "onbekend" else ""), "licence": r["licence"],
+         "herkomst": r["rights_basis"], "taken_at": r["taken_at"],
          "uploaded_at": r["uploaded_at"], "url": f"{base}/foto/{r['id']}",
          "tags": [{"person": t["person_id"], "name": t["name"] or archive.rider_naam(t["person_id"])} for t in zichtbare_tags(r["id"])]}
     if met_status: d["status"] = r["status"]

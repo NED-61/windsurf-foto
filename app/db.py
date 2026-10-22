@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS photos (
   uploaded_at TEXT NOT NULL,
   caption TEXT, credit TEXT,
   licence TEXT NOT NULL DEFAULT 'archief',
+  rights_basis TEXT NOT NULL DEFAULT 'eigen', -- eigen | toestemming | onbekend (fotograaf onbekend: te goeder trouw geplaatst, weg op verzoek)
   orig_public INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'wacht',      -- wacht | zichtbaar | verborgen | verwijderd
   status_reason TEXT, status_by INTEGER, status_at TEXT,
@@ -130,6 +131,7 @@ def _migreer(con):
     if "hide_profile" not in kol: con.execute("ALTER TABLE users ADD COLUMN hide_profile INTEGER NOT NULL DEFAULT 0")
     kol = {r["name"] for r in con.execute("PRAGMA table_info(photos)")}
     if "orig_rel" not in kol: con.execute("ALTER TABLE photos ADD COLUMN orig_rel TEXT")
+    if "rights_basis" not in kol: con.execute("ALTER TABLE photos ADD COLUMN rights_basis TEXT NOT NULL DEFAULT 'eigen'")
 
 
 def reset():

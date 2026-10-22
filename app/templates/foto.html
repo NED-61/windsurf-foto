@@ -8,7 +8,8 @@
     <img src="{{ fj.m }}" width="{{ f.width }}" height="{{ f.height }}" alt="{{ f.caption or ('Foto ' ~ f.id) }}">
     <figcaption>
       {% if f.caption %}<p class="caption">{{ f.caption }}</p>{% endif %}
-      <p class="small muted">Foto: {{ f.credit or uploader.name }}{% if f.taken_at %}, {{ f.taken_at|dt }}{% endif %}. {{ LICENTIES[f.licence] }}. Geplaatst door {{ uploader.name }} op {{ f.uploaded_at|datum }}.
+      <p class="small muted">Foto: {% if f.rights_basis == 'onbekend' %}fotograaf onbekend{% else %}{{ f.credit or uploader.name }}{% endif %}{% if f.taken_at %}, {{ f.taken_at|dt }}{% endif %}. {{ LICENTIES[f.licence] }}. Geplaatst door {{ uploader.name }} op {{ f.uploaded_at|datum }}.
+      {% if f.rights_basis == 'onbekend' %}<br>Deze foto is geplaatst zonder dat de fotograaf bekend is. <strong>Is dit jouw foto?</strong> <a href="#melden">Meld het</a>, dan zetten we je naam erbij of halen we hem weg.{% endif %}
       {% if f.status != 'zichtbaar' %}<span class="badge badge-{{ f.status }}">{{ f.status }}</span>{% if f.status_reason %} ({{ f.status_reason }}){% endif %}{% endif %}</p>
       {% if orig and (f.orig_public or eigenaar or (user and user.role == 'admin')) %}<p class="small"><a href="/o/{{ f.id }}">Origineel downloaden</a> ({{ f.size|mb }}, {{ f.width }} × {{ f.height }})</p>{% endif %}
     </figcaption>
@@ -45,8 +46,10 @@
   <form class="form" method="post" action="/api/foto/{{ f.id }}" data-fetch="1">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>Bijschrift <input name="bijschrift" maxlength="300" value="{{ f.caption or '' }}" placeholder="Bijvoorbeeld: finale heren, eerste boei"></label>
-    <label>Fotograaf <input name="fotograaf" maxlength="100" value="{{ f.credit or '' }}"></label>
+    <label>Wie heeft de foto gemaakt? <select name="herkomst">{% for k, v in HERKOMST.items() %}<option value="{{ k }}"{% if k == f.rights_basis %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Fotograaf <input name="fotograaf" maxlength="100" value="{{ f.credit or '' }}" placeholder="leeg laten als onbekend"></label>
     <label>Licentie <select name="licentie">{% for k, v in LICENTIES.items() %}<option value="{{ k }}"{% if k == f.licence %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
+    <p class="small muted">Meldt de fotograaf zich? Zet dan "iemand anders, met toestemming" en zijn naam, of verwijder de foto als hij dat wil.</p>
     <label class="check"><input type="checkbox" name="origineel_vrij" value="1"{% if f.orig_public %} checked{% endif %}> Het origineel mag iedereen downloaden</label>
     <p><button class="btn" type="submit">Opslaan</button> <span class="form-uit small muted"></span></p>
   </form>
@@ -67,12 +70,12 @@
 {% endif %}
 
 {% if f.status == 'zichtbaar' %}
-<section class="block">
-  <details>
-    <summary class="small">Klopt er iets niet aan deze foto? Meld het.</summary>
+<section class="block" id="melden">
+  <details{% if f.rights_basis == 'onbekend' %} open{% endif %}>
+    <summary class="small">Klopt er iets niet aan deze foto, of is het jouw foto? Meld het.</summary>
     <form class="form" method="post" action="/foto/{{ f.id }}/melden">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label>Wat is er aan de hand? <input name="reden" required minlength="3" maxlength="500" placeholder="Bijvoorbeeld: dit ben ik en ik wil deze foto niet online"></label>
+      <label>Wat is er aan de hand? <input name="reden" required minlength="3" maxlength="500" placeholder="{% if f.rights_basis == 'onbekend' %}Bijvoorbeeld: dit is mijn foto, zet mijn naam erbij (of: haal hem weg){% else %}Bijvoorbeeld: dit ben ik en ik wil deze foto niet online{% endif %}"></label>
       <p><button class="btn btn-stil" type="submit">Melden</button></p>
     </form>
   </details>

@@ -45,6 +45,7 @@ def api_rider(pid: str):
 
 
 RECHTEN = {"archief": "alleen op dit archief, met toestemming van de uploader", "cc-by": "CC BY 4.0", "cc-by-nc": "CC BY-NC 4.0"}
+RECHTEN_ONBEKEND = "fotograaf onbekend; te goeder trouw geplaatst, wordt op verzoek van de fotograaf weggehaald of van naam voorzien"
 
 
 @router.get("/api/export/{slug}")
@@ -54,7 +55,7 @@ def api_export(slug: str):
     for r in web.zichtbare_fotos("event_slug=?", slug):
         up = db.one("SELECT name FROM users WHERE id=?", r["uploader_id"])
         uit.append({"file": f"nas:{r['orig_rel'] or r['key']}", "type": "foto", "sha256": r["sha256"], "caption": r["caption"], "credit": r["credit"] or (up["name"] if up else None),
-                    "rights": RECHTEN.get(r["licence"], r["licence"]), "source_url": f"{config.APP_URL}/foto/{r['id']}",
+                    "rights": RECHTEN_ONBEKEND if r["rights_basis"] == "onbekend" else RECHTEN.get(r["licence"], r["licence"]), "source_url": f"{config.APP_URL}/foto/{r['id']}",
                     "people": [t["person_id"] for t in web.zichtbare_tags(r["id"]) if t["person_id"]], "classes": [], "in_repo": False,
                     "reason": f"staat op de NAS (windsurf-foto, foto {r['id']}); origineel {r['ext']}, {r['size']} bytes" + (f", opname {r['taken_at']}" if r["taken_at"] else ""),
                     "nas": {"id": r["id"], "key": r["key"], "uploaded_at": r["uploaded_at"], "taken_at": r["taken_at"], "width": r["width"], "height": r["height"]}})

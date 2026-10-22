@@ -26,9 +26,14 @@
   <section class="block">
     <div class="block-h"><h2>2. Over deze foto's</h2></div>
     <form class="form" id="opties" onsubmit="return false">
-      <label>Fotograaf <input name="fotograaf" maxlength="100" value="{{ user.name }}"></label>
-      <label>Licentie <select name="licentie">{% for k, v in LICENTIES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
-      <label class="check"><input type="checkbox" name="toestemming" value="ja"> Ik heb deze foto's zelf gemaakt, of ik heb toestemming van de fotograaf om ze hier te plaatsen.</label>
+      <fieldset class="herkomst">
+        <legend>Wie heeft de foto's gemaakt?</legend>
+        {% for k, v in HERKOMST.items() %}<label class="check"><input type="radio" name="herkomst" value="{{ k }}"{% if k == 'eigen' %} checked{% endif %}> {{ v }}</label>{% endfor %}
+      </fieldset>
+      <label id="fotograaf-veld">Fotograaf <input name="fotograaf" maxlength="100" value="{{ user.name }}" data-eigen="{{ user.name }}"></label>
+      <label id="licentie-veld">Licentie <select name="licentie">{% for k, v in LICENTIES.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      <p id="onbekend-uitleg" class="small muted" hidden>Bij een onbekende fotograaf komt "fotograaf onbekend" bij de foto te staan, met een knop waarmee de fotograaf zich kan melden; dan zetten we zijn naam erbij of halen we de foto weg. De licentie is dan altijd "alleen op dit archief": je kunt geen rechten weggeven op andermans foto.</p>
+      <label class="check"><input type="checkbox" name="toestemming" value="ja"> <span id="verklaring">Ik heb deze foto's zelf gemaakt, of ik heb toestemming van de fotograaf om ze hier te plaatsen.</span></label>
       <p class="small muted">{% if mag_direct %}Je foto's staan direct op de site.{% else %}Je foto's komen eerst in de wachtrij; de beheerder kijkt er naar en dan staan ze op de site. Als nieuw account kun je {{ cfg.DAGLIMIET_NIEUW }} foto's per dag uploaden.{% endif %} GPS-gegevens worden uit de verkleinde versies gehaald; het origineel bewaren we ongewijzigd.</p>
     </form>
   </section>

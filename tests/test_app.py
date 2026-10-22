@@ -134,6 +134,21 @@ def test_dubbel_en_fout_bestand_en_csrf(omgeving):
     assert upload(c, "bestaat-niet", jpeg((9, 9, 9))).status_code == 400
     assert upload(c, "nk-slalom-2024", jpeg((4, 5, 6)), csrf="fout").status_code == 400
     assert upload(c, "nk-slalom-2024", jpeg((7, 8, 9)), toestemming="").status_code == 400
+    # herkomst: met toestemming vraagt een naam; onbekend geeft geen fotograaf en altijd 'alleen op dit archief'
+    assert upload(c, "nk-slalom-2024", jpeg((11, 12, 13)), herkomst="toestemming").status_code == 400
+    f = upload(c, "nk-slalom-2024", jpeg((11, 12, 13)), herkomst="toestemming", fotograaf="Oma Jansen", licentie="cc-by").json()["foto"]
+    assert f["credit"] == "Oma Jansen" and f["licence"] == "cc-by" and f["herkomst"] == "toestemming"
+    f = upload(c, "nk-slalom-2024", jpeg((14, 15, 16)), herkomst="onbekend", fotograaf="Lid", licentie="cc-by").json()["foto"]
+    assert f["credit"] == "fotograaf onbekend" and f["licence"] == "archief" and f["herkomst"] == "onbekend"
+    a = admin_client(omgeving)
+    a.post(f"/beheer/account/{db.one('SELECT id FROM users WHERE email=?', 'lid@example.org')['id']}/goedkeuren-alles", data={"csrf": csrf_van(a, "/beheer")})
+    html = c.get(f"/foto/{f['id']}").text
+    assert "fotograaf onbekend" in html and "Is dit jouw foto?" in html
+    ex = c.get("/api/export/nk-slalom-2024").json()
+    assert any(x["rights"].startswith("fotograaf onbekend") for x in ex["files"])
+    # de fotograaf meldt zich: uploader zet naam en herkomst
+    r = c.post(f"/api/foto/{f['id']}", data={"csrf": csrf_van(c, "/account"), "herkomst": "toestemming", "fotograaf": "Piet Fotograaf", "licentie": "archief"})
+    assert r.json()["foto"]["credit"] == "Piet Fotograaf" and r.json()["foto"]["herkomst"] == "toestemming"
 
 
 def test_claim_goedkeuren_maakt_vertrouwd(omgeving):

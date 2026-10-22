@@ -44,6 +44,25 @@
   }
   if (slug) { naarWedstrijd.href = "/wedstrijd/" + slug; laadEigen(); }
 
+  /* ---------- herkomst: eigen foto, met toestemming, of fotograaf onbekend ---------- */
+  var TEKST = {
+    eigen: "Ik heb deze foto's zelf gemaakt en mag ze hier plaatsen.",
+    toestemming: "Ik heb toestemming van de fotograaf om deze foto's hier te plaatsen.",
+    onbekend: "Ik weet niet wie deze foto's heeft gemaakt. Ik plaats ze te goeder trouw en ga akkoord dat ze worden weggehaald als de fotograaf dat vraagt."
+  };
+  function herkomst() { var r = opties.querySelector("input[name=herkomst]:checked"); return r ? r.value : "eigen"; }
+  function toonHerkomst() {
+    var h = herkomst(), fv = document.getElementById("fotograaf-veld"), lv = document.getElementById("licentie-veld"), fi = opties.fotograaf;
+    fv.hidden = h === "onbekend"; lv.hidden = h === "onbekend"; document.getElementById("onbekend-uitleg").hidden = h !== "onbekend";
+    document.getElementById("verklaring").textContent = TEKST[h];
+    if (h === "eigen" && !fi.value) fi.value = fi.dataset.eigen || "";
+    if (h === "toestemming" && fi.value === fi.dataset.eigen) fi.value = "";
+    fi.placeholder = h === "toestemming" ? "naam van de fotograaf (verplicht)" : "";
+    opties.toestemming.checked = false;
+  }
+  Array.prototype.forEach.call(opties.querySelectorAll("input[name=herkomst]"), function (r) { r.addEventListener("change", toonHerkomst); });
+  toonHerkomst();
+
   /* ---------- eerder geüploade foto's van deze wedstrijd ---------- */
   function laadEigen() {
     if (!slug) return;
@@ -64,7 +83,8 @@
   /* ---------- bestanden kiezen ---------- */
   function voegToe(files) {
     if (!slug) { alert("Kies eerst de wedstrijd."); evQ && evQ.focus(); return; }
-    if (!opties.toestemming.checked) { alert("Vink eerst aan dat je de foto's zelf hebt gemaakt of mag delen."); opties.toestemming.focus(); return; }
+    if (herkomst() === "toestemming" && opties.fotograaf.value.trim().length < 2) { alert("Vul de naam van de fotograaf in."); opties.fotograaf.focus(); return; }
+    if (!opties.toestemming.checked) { alert("Vink eerst de verklaring over de foto's aan."); opties.toestemming.focus(); return; }
     Array.prototype.forEach.call(files, function (f) {
       var li = document.createElement("li");
       li.innerHTML = "<span>" + esc(f.name) + ' <small class="muted">' + (f.size / 1e6).toFixed(1) + ' MB</small></span><span class="st">wacht</span><div class="balk"><i></i></div>';
@@ -81,7 +101,7 @@
     var st = item.li.querySelector(".st"), balk = item.li.querySelector(".balk i");
     st.textContent = "bezig"; st.className = "st";
     var fd = new FormData();
-    fd.append("csrf", csrf); fd.append("wedstrijd", slug); fd.append("licentie", opties.licentie.value); fd.append("fotograaf", opties.fotograaf.value); fd.append("toestemming", "ja");
+    fd.append("csrf", csrf); fd.append("wedstrijd", slug); fd.append("licentie", opties.licentie.value); fd.append("fotograaf", opties.fotograaf.value); fd.append("toestemming", "ja"); fd.append("herkomst", herkomst());
     fd.append("bestand", item.file, item.file.name);
     var x = new XMLHttpRequest();
     x.open("POST", "/api/upload");
