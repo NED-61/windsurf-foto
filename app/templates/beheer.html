@@ -16,7 +16,7 @@
   <div class="fotos-grid beheer-grid">
   {% for f in fotos %}
     <div class="ft-b">
-      <a class="ft" href="/foto/{{ f.id }}" data-m="/i/{{ f.key }}/m.jpg" data-url="/foto/{{ f.id }}" data-caption="{{ f.caption }}" data-credit="{{ f.credit }}"><img loading="lazy" src="/i/{{ f.key }}/t.jpg" width="{{ f.tw }}" height="{{ f.th }}" alt=""></a>
+      <a class="ft" href="/foto/{{ f.id }}"><img loading="lazy" src="/i/{{ f.key }}/t.jpg" width="{{ f.tw }}" height="{{ f.th }}" alt=""></a>
       <div class="acties">
         <form method="post" action="/beheer/foto/{{ f.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><button class="btn btn-klein" type="submit">OK</button></form>
         <form method="post" action="/beheer/foto/{{ f.id }}/verbergen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><input name="reden" placeholder="reden" class="klein"><button class="btn btn-klein btn-stil" type="submit">Verberg</button></form>

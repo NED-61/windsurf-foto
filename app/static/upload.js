@@ -74,7 +74,7 @@
   }
   function toonKlaar(f) {
     var a = document.createElement("a");
-    a.className = "ft"; a.href = "/foto/" + f.id; a.dataset.m = "/i/" + f.key + "/m.jpg"; a.dataset.url = "/foto/" + f.id; a.dataset.caption = f.caption || ""; a.dataset.credit = f.credit || "";
+    a.className = "ft"; a.href = "/foto/" + f.id; a.title = f.caption || "";
     a.innerHTML = '<img src="/i/' + esc(f.key) + '/t.jpg" width="' + f.tw + '" height="' + f.th + '" alt="">' + (f.status !== "zichtbaar" ? '<span class="badge badge-' + esc(f.status) + '">' + (f.status === "wacht" ? "wachtrij" : esc(f.status)) + "</span>" : "");
     klaar.appendChild(a);
     klaarBlok.hidden = false;

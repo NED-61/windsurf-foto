@@ -1,7 +1,7 @@
-{# Fotoraster. Gebruik: {% with fotos=..., status=True %}{% include "_grid.html" %}{% endwith %} #}
+{# Fotoraster: elke foto is een link naar de fotopagina. Gebruik: {% with fotos=..., status=True %}{% include "_grid.html" %}{% endwith %} #}
 <div class="fotos-grid">
 {% for f in fotos %}
-  <a class="ft" href="/foto/{{ f.id }}" data-m="/i/{{ f.key }}/m.jpg" data-url="/foto/{{ f.id }}" data-caption="{{ f.caption }}" data-credit="{{ f.credit }}" data-id="{{ f.id }}">
+  <a class="ft" href="/foto/{{ f.id }}" title="{{ f.caption }}">
     <img loading="lazy" src="/i/{{ f.key }}/t.jpg" width="{{ f.tw }}" height="{{ f.th }}" alt="{{ f.caption or ('Foto ' ~ f.id) }}">
     {% if status and f.status != 'zichtbaar' %}<span class="badge badge-{{ f.status }}">{{ {'wacht': 'wachtrij', 'verborgen': 'verborgen'}[f.status] }}</span>{% endif %}
   </a>
