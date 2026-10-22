@@ -64,10 +64,27 @@ def foto_json(r, met_status=False) -> dict:
          "t": f"{base}/i/{r['key']}/t.jpg", "m": f"{base}/i/{r['key']}/m.jpg", "w": r["width"], "h": r["height"], "tw": tw, "th": th,
          "caption": r["caption"] or "", "credit": r["credit"] or "", "licence": r["licence"], "taken_at": r["taken_at"],
          "uploaded_at": r["uploaded_at"], "url": f"{base}/foto/{r['id']}",
-         "tags": [{"person": t["person_id"], "name": t["name"] or archive.rider_naam(t["person_id"])}
-                  for t in db.all_("SELECT person_id,name FROM tags WHERE photo_id=? AND status='zichtbaar'", r["id"])]}
+         "tags": [{"person": t["person_id"], "name": t["name"] or archive.rider_naam(t["person_id"])} for t in zichtbare_tags(r["id"])]}
     if met_status: d["status"] = r["status"]
     return d
+
+
+VERBORGEN_PROFIEL = "NOT EXISTS (SELECT 1 FROM users u WHERE u.person_id=t.person_id AND u.hide_profile=1)"
+
+
+def zichtbare_tags(photo_id):
+    """Zichtbare tags, zonder riders die hebben ingesteld dat ze niet getoond willen worden."""
+    return db.all_(f"SELECT t.* FROM tags t WHERE t.photo_id=? AND t.status='zichtbaar' AND {VERBORGEN_PROFIEL} ORDER BY t.id", photo_id)
+
+
+def tag_json(t, viewer=None, foto=None) -> dict:
+    """Een tag voor de pagina: naam, status en wat deze kijker ermee mag."""
+    admin = auth.is_admin(viewer)
+    zelf = bool(viewer and viewer["person_id"] and t["person_id"] == viewer["person_id"])
+    eigen = bool(viewer and (t["tagged_by"] == viewer["id"] or (foto and foto["uploader_id"] == viewer["id"])))
+    return {"id": t["id"], "person": t["person_id"], "name": t["name"] or archive.rider_naam(t["person_id"]), "status": t["status"],
+            "url": f"{config.SITE_URL}/rider/{t['person_id']}.html" if t["person_id"] else None,
+            "kan_weg": admin or zelf or eigen, "kan_ok": t["status"] == "wacht" and (admin or zelf)}
 
 
 def zichtbare_fotos(where: str, *args, limiet=None):

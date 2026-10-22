@@ -38,9 +38,27 @@ def api_wedstrijd(slug: str):
 
 @router.get("/api/rider/{pid}")
 def api_rider(pid: str):
-    rows = db.all_("SELECT p.* FROM photos p JOIN tags t ON t.photo_id=p.id WHERE t.person_id=? AND t.status='zichtbaar' AND p.status='zichtbaar' "
+    """Foto's waarop deze rider getagd is; leeg als de rider heeft ingesteld dat hij geen foto's op zijn profiel wil."""
+    rows = db.all_(f"SELECT p.* FROM photos p JOIN tags t ON t.photo_id=p.id WHERE t.person_id=? AND t.status='zichtbaar' AND p.status='zichtbaar' AND {web.VERBORGEN_PROFIEL} "
                    "GROUP BY p.id ORDER BY COALESCE(p.taken_at, p.uploaded_at) DESC", pid)
     return JSONResponse({"rider": pid, "n": len(rows), "fotos": [web.foto_json(r) for r in rows]}, headers={"Cache-Control": "public, max-age=60"})
+
+
+RECHTEN = {"archief": "alleen op dit archief, met toestemming van de uploader", "cc-by": "CC BY 4.0", "cc-by-nc": "CC BY-NC 4.0"}
+
+
+@router.get("/api/export/{slug}")
+def api_export(slug: str):
+    """Manifestregels in het formaat van media/media.json in de archief-repo (tools/foto_manifest.py haalt ze op). Alleen zichtbare foto's."""
+    uit = []
+    for r in web.zichtbare_fotos("event_slug=?", slug):
+        up = db.one("SELECT name FROM users WHERE id=?", r["uploader_id"])
+        uit.append({"file": f"nas:{r['key']}", "type": "foto", "sha256": r["sha256"], "caption": r["caption"], "credit": r["credit"] or (up["name"] if up else None),
+                    "rights": RECHTEN.get(r["licence"], r["licence"]), "source_url": f"{config.APP_URL}/foto/{r['id']}",
+                    "people": [t["person_id"] for t in web.zichtbare_tags(r["id"]) if t["person_id"]], "classes": [], "in_repo": False,
+                    "reason": f"staat op de NAS (windsurf-foto, foto {r['id']}); origineel {r['ext']}, {r['size']} bytes" + (f", opname {r['taken_at']}" if r["taken_at"] else ""),
+                    "nas": {"id": r["id"], "key": r["key"], "uploaded_at": r["uploaded_at"], "taken_at": r["taken_at"], "width": r["width"], "height": r["height"]}})
+    return JSONResponse({"wedstrijd": slug, "n": len(uit), "files": uit}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/api/nieuw")
@@ -63,8 +81,11 @@ def api_wedstrijden(q: str = ""):
 
 
 @router.get("/api/riders")
-def api_riders(q: str = ""):
-    return [{"id": r["id"], "name": r["name"], "sails": r.get("sails", []), "years": r.get("years", ""), "n": r.get("n", 0)} for r in archive.zoek_riders(q)]
+def api_riders(q: str = "", wedstrijd: str = ""):
+    """Riders zoeken; met ?wedstrijd= komen de deelnemers van die wedstrijd eerst (zonder q: de hele deelnemerslijst)."""
+    deel = archive.deelnemers(wedstrijd) if wedstrijd else set()
+    return [{"id": r["id"], "name": r["name"], "sails": r.get("sails", []), "years": r.get("years", ""), "n": r.get("n", 0), "deelnemer": r["id"] in deel}
+            for r in archive.zoek_riders(q, slug=wedstrijd or None)]
 
 
 # ---------------------------------------------------------------- afbeeldingen
@@ -110,7 +131,8 @@ def home(request: Request):
     evs = archive.events()
     lijst = [{"slug": r["event_slug"], "naam": archive.event_naam(r["event_slug"]), "n": r["n"], "jaar": (evs.get(r["event_slug"]) or {}).get("year")} for r in per_event]
     totaal = db.one("SELECT COUNT(*) n FROM photos WHERE status='zichtbaar'")["n"]
-    return web.render(request, "index.html", nieuw=nieuw, wedstrijden=lijst, totaal=totaal)
+    fotografen = db.all_("SELECT credit, COUNT(*) n FROM photos WHERE status='zichtbaar' AND credit IS NOT NULL GROUP BY credit ORDER BY n DESC, credit LIMIT 30")
+    return web.render(request, "index.html", nieuw=nieuw, wedstrijden=lijst, totaal=totaal, fotografen=fotografen)
 
 
 @router.get("/wedstrijd/{slug}")
@@ -138,10 +160,16 @@ def foto(request: Request, foto_id: int):
     i = ids.index(foto_id) if foto_id in ids else -1
     vorige = ids[i - 1] if i > 0 else None
     volgende = ids[i + 1] if 0 <= i < len(ids) - 1 else None
-    tags = db.all_("SELECT * FROM tags WHERE photo_id=? AND status!='verwijderd' ORDER BY id", foto_id)
+    # tags: zichtbare voor iedereen (behalve van riders die niet getoond willen worden); wachtende alleen voor wie ermee te maken heeft
+    tags = [web.tag_json(t, u, r) for t in web.zichtbare_tags(foto_id)]
+    if u:
+        for t in db.all_("SELECT * FROM tags WHERE photo_id=? AND status='wacht' ORDER BY id", foto_id):
+            tj = web.tag_json(t, u, r)
+            if tj["kan_weg"] or tj["kan_ok"]: tags.append(tj)
     meldingen = db.all_("SELECT r.*, u.name uname FROM reports r LEFT JOIN users u ON u.id=r.user_id WHERE photo_id=? ORDER BY id DESC", foto_id) if auth.is_admin(u) else []
+    mag_taggen = bool(u and u["email_verified"] and not u["blocked"] and r["status"] == "zichtbaar")
     return web.render(request, "foto.html", f=r, fj=web.foto_json(r, met_status=True), uploader=up, eigenaar=eigenaar, vorige=vorige, volgende=volgende,
-                      tags=tags, meldingen=meldingen, ev=archive.event(r["event_slug"]), orig=images.orig_path(r["sha256"], r["ext"]).exists())
+                      tags=tags, mag_taggen=mag_taggen, meldingen=meldingen, ev=archive.event(r["event_slug"]), orig=images.orig_path(r["sha256"], r["ext"]).exists())
 
 
 @router.post("/foto/{foto_id}/melden")

@@ -21,6 +21,8 @@ def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, 
         for r in rows: groepen.setdefault((r["uploader_id"], r["uname"], r["uemail"], r["event_slug"]), []).append(web.foto_json(r, met_status=True))
         ctx["groepen"] = groepen
         ctx["verborgen"] = db.all_("SELECT p.*, u.name uname FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='verborgen' ORDER BY p.status_at DESC LIMIT 100")
+        ctx["tags_wacht"] = [dict(t, naam=t["name"] or archive.rider_naam(t["person_id"]), jeugd=bool(t["person_id"] and archive.rider_youth(t["person_id"])))
+                             for t in db.all_("SELECT t.*, p.key, p.event_slug, u.name tagger FROM tags t JOIN photos p ON p.id=t.photo_id JOIN users u ON u.id=t.tagged_by WHERE t.status='wacht' ORDER BY t.id")]
     elif tab == "meldingen":
         ctx["open"] = db.all_("SELECT r.*, u.name uname, p.event_slug, p.status pstatus, p.key FROM reports r LEFT JOIN users u ON u.id=r.user_id JOIN photos p ON p.id=r.photo_id WHERE r.handled_at IS NULL ORDER BY r.id DESC")
         ctx["afgehandeld"] = db.all_("SELECT r.*, u.name uname, p.event_slug FROM reports r LEFT JOIN users u ON u.id=r.user_id JOIN photos p ON p.id=r.photo_id WHERE r.handled_at IS NOT NULL ORDER BY r.id DESC LIMIT 50")

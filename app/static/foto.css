@@ -32,7 +32,12 @@ input.klein { font: inherit; font-size: .85rem; padding: .15rem .4rem; border: 1
 .caption { font-size: 1.05rem; }
 .buren { display: flex; justify-content: space-between; gap: 1rem; margin-top: .75rem; }
 .tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
-.tags li { padding: .1rem .5rem; border: 1px solid var(--line); border-radius: 1em; }
+.tags li { padding: .1rem .5rem; border: 1px solid var(--line); border-radius: 1em; display: inline-flex; gap: .4rem; align-items: center; }
+.tags li form { display: inline; }
+.tags-wacht { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
+.tags-wacht li { display: grid; grid-template-columns: 120px 1fr auto; gap: .75rem; align-items: center; }
+.tags-wacht .ft { aspect-ratio: auto; }
+@media (max-width: 40rem) { .tags-wacht li { grid-template-columns: 1fr; } }
 
 /* lightbox */
 .lb { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .92); display: flex; flex-direction: column; color: #eee; }

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   blocked INTEGER NOT NULL DEFAULT 0,
   blocked_reason TEXT,
   person_id TEXT,                            -- goedgekeurde claim op een rider uit people.json
+  hide_profile INTEGER NOT NULL DEFAULT 0,   -- rider wil geen foto's op zijn profiel en geen tags met zijn naam
   created_at TEXT NOT NULL,
   last_login TEXT
 );
@@ -118,7 +119,14 @@ def db() -> sqlite3.Connection:
     if _con is None:
         _con = connect()
         _con.executescript(SCHEMA)
+        _migreer(_con)
     return _con
+
+
+def _migreer(con):
+    """Kolommen die na versie 0.2 zijn toegevoegd, voor een database die al bestond."""
+    kol = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+    if "hide_profile" not in kol: con.execute("ALTER TABLE users ADD COLUMN hide_profile INTEGER NOT NULL DEFAULT 0")
 
 
 def reset():

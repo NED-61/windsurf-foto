@@ -17,6 +17,7 @@ from . import config, db, auth, images, archive, web
 from .routes_public import router as public_router
 from .routes_account import router as account_router
 from .routes_admin import router as admin_router
+from .routes_tags import router as tags_router
 
 def opstart():
     for d in (config.DATA_DIR, config.ORIG_DIR, config.DERIVED_DIR, config.ARCHIEF_DIR, config.DATA_DIR / "tmp"):
@@ -41,6 +42,7 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 app.include_router(public_router)
 app.include_router(account_router)
 app.include_router(admin_router)
+app.include_router(tags_router)
 
 
 def _zorg_admin():

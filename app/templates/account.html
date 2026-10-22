@@ -17,6 +17,26 @@
   {% endif %}
 </section>
 
+{% if user.person_id %}
+<section class="block">
+  <div class="block-h"><h2>Foto's van jou</h2></div>
+  <p>{{ n_op_profiel }} foto's waarop je getagd bent{% if n_op_profiel and not user.hide_profile %}; die staan op <a href="{{ cfg.SITE_URL }}/rider/{{ user.person_id }}.html">je riderpagina</a>{% endif %}.</p>
+  <form class="form inline" method="post" action="/account/profiel">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="verberg" value="{{ 0 if user.hide_profile else 1 }}">
+    {% if user.hide_profile %}<span class="small">Je hebt ingesteld dat er geen foto's op je profiel staan en dat je naam niet bij foto's wordt getoond.</span> <button class="btn btn-stil" type="submit">Weer tonen</button>
+    {% else %}<button class="btn btn-stil" type="submit">Toon geen foto's op mijn profiel</button> <span class="small muted">Verbergt ook je naam bij alle foto's, tot je het weer aanzet.</span>{% endif %}
+  </form>
+  {% if mijn_tags %}
+  <h3>Wacht op jouw goedkeuring</h3>
+  <p class="small muted">Iemand heeft je op deze foto's getagd. Keur goed, of haal de tag weg.</p>
+  <ul class="tags-wacht">{% for t in mijn_tags %}<li><a class="ft" href="/foto/{{ t.photo_id }}"><img src="/i/{{ t.key }}/t.jpg" width="120" alt=""></a>
+    <span>{{ event_naam(t.event_slug) }}, getagd door {{ t.tagger }}</span>
+    <span class="acties"><form class="inline" method="post" action="/api/tag/{{ t.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/account"><button class="btn btn-klein" type="submit">Goedkeuren</button></form>
+    <form class="inline" method="post" action="/api/tag/{{ t.id }}/verwijder"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/account"><button class="btn btn-klein btn-stil" type="submit">Weghalen</button></form></span></li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if not user.email_verified %}
 <section class="block">
   <div class="block-h"><h2>E-mailadres bevestigen</h2></div>

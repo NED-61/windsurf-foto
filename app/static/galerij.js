@@ -58,7 +58,7 @@
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (x) {
         if (!x.ok) { if (uit) uit.textContent = x.j.fout || "Mislukt."; else alert(x.j.fout || "Mislukt."); return; }
-        if (f.dataset.daarna) { location.href = f.dataset.daarna; return; }
+        if (f.dataset.daarna) { location.href = f.dataset.daarna + (x.j.bericht ? (f.dataset.daarna.indexOf("?") >= 0 ? "&" : "?") + "bericht=" + encodeURIComponent(x.j.bericht) : ""); return; }
         if (uit) uit.textContent = "Opgeslagen.";
       })
       .catch(function () { if (uit) uit.textContent = "Geen verbinding."; });

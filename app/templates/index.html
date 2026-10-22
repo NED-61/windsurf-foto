@@ -20,6 +20,12 @@
   </ul>
   {% else %}<p class="muted">Nog geen foto's. Heb jij er? <a href="/upload">Upload ze bij een wedstrijd.</a></p>{% endif %}
 </section>
+{% if fotografen %}
+<section class="block">
+  <div class="block-h"><h2>Fotografen</h2></div>
+  <p class="small">{% for f in fotografen %}{{ f.credit }} ({{ f.n }}){% if not loop.last %} · {% endif %}{% endfor %}</p>
+</section>
+{% endif %}
 <section class="block prose">
   <h2>Zelf foto's toevoegen</h2>
   <p>Iedereen die foto's heeft van een wedstrijd uit het archief kan ze hier plaatsen: maak een account, kies de wedstrijd en sleep de foto's erin. Ben je zelf rider, claim dan je naam op je accountpagina; daarna staan je foto's direct online. Nieuwe accounts komen eerst even langs de beheerder.</p>

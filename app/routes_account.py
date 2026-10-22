@@ -137,7 +137,13 @@ def account(request: Request):
     per_event = {}
     for r in fotos: per_event.setdefault(r["event_slug"], []).append(web.foto_json(r, met_status=True))
     claim = db.one("SELECT * FROM claims WHERE user_id=? ORDER BY id DESC LIMIT 1", u["id"])
-    return web.render(request, "account.html", per_event=per_event, claim=claim, n_fotos=len(fotos))
+    mijn_tags, n_op_profiel = [], 0
+    if u["person_id"]:
+        n_op_profiel = db.one("SELECT COUNT(DISTINCT t.photo_id) n FROM tags t JOIN photos p ON p.id=t.photo_id WHERE t.person_id=? AND t.status='zichtbaar' AND p.status='zichtbaar'", u["person_id"])["n"]
+        mijn_tags = [dict(web.tag_json(t, u), key=t["key"], event_slug=t["event_slug"], tagger=t["tagger"], photo_id=t["photo_id"])
+                     for t in db.all_("SELECT t.*, p.key, p.event_slug, uu.name tagger FROM tags t JOIN photos p ON p.id=t.photo_id JOIN users uu ON uu.id=t.tagged_by "
+                                      "WHERE t.person_id=? AND t.status='wacht' AND p.status='zichtbaar' ORDER BY t.id", u["person_id"])]
+    return web.render(request, "account.html", per_event=per_event, claim=claim, n_fotos=len(fotos), mijn_tags=mijn_tags, n_op_profiel=n_op_profiel)
 
 
 @router.post("/account/bevestiging-opnieuw")

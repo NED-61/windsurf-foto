@@ -23,10 +23,12 @@ def omgeving(tmp_path, monkeypatch):
     from app import config
     archief = pathlib.Path(config.ARCHIEF_DIR); archief.mkdir(parents=True)
     (archief / "wedstrijden.json").write_text(json.dumps([
-        {"slug": "nk-slalom-2024", "name": "NK Slalom 2024", "year": 2024, "date": "2024-06-15", "date_end": "2024-06-16", "location": "Aalsmeer", "classes": ["Heren"], "riders": ["jan-jansen"]},
-        {"slug": "gpa-2025", "name": "Grote Prijs van Aalsmeer 2025", "year": 2025, "date": "2025-09-06", "date_end": None, "location": "Aalsmeer", "classes": [], "riders": []}]), encoding="utf-8")
-    (archief / "riders.json").write_text(json.dumps([{"id": "jan-jansen", "name": "Jan Jansen", "aliases": [], "sails": ["NED 61"], "n": 5, "years": "2017–2024"},
-                                                      {"id": "piet-de-vries", "name": "Piet de Vries", "aliases": [], "sails": ["H 12"], "n": 1, "years": "1999"}]), encoding="utf-8")
+        {"slug": "nk-slalom-2024", "name": "NK Slalom 2024", "year": 2024, "date": "2024-06-15", "date_end": "2024-06-16", "location": "Aalsmeer", "classes": ["Heren", "Jeugd"], "youth_classes": ["Jeugd"], "riders": ["jan-jansen", "kim-de-jong"]},
+        {"slug": "gpa-2025", "name": "Grote Prijs van Aalsmeer 2025", "year": 2025, "date": "2025-09-06", "date_end": None, "location": "Aalsmeer", "classes": [], "riders": []},
+        {"slug": "kids-cup-2025", "name": "Kids Cup 2025", "year": 2025, "date": "2025-05-01", "date_end": None, "location": "Heeg", "classes": ["Kids"], "youth_classes": ["Kids"], "riders": ["kim-de-jong"]}]), encoding="utf-8")
+    (archief / "riders.json").write_text(json.dumps([{"id": "jan-jansen", "name": "Jan Jansen", "aliases": [], "sails": ["NED 61"], "n": 5, "years": "2017–2024", "youth": False},
+                                                      {"id": "piet-de-vries", "name": "Piet de Vries", "aliases": [], "sails": ["H 12"], "n": 1, "years": "1999", "youth": False},
+                                                      {"id": "kim-de-jong", "name": "Kim de Jong", "aliases": [], "sails": ["NED 7"], "n": 2, "years": "2024–2025", "youth": True}]), encoding="utf-8")
     from app.main import app
     from app import db
     from fastapi.testclient import TestClient
@@ -214,6 +216,65 @@ def test_wachtwoord_vergeten_en_onbevestigd(omgeving):
     r = c.post(link, data={"csrf": csrf_van(c, link), "wachtwoord": "nieuwwachtwoord1", "wachtwoord2": "nieuwwachtwoord1"})
     assert r.status_code == 200 and "gewijzigd" in r.text
     assert db.one("SELECT email_verified FROM users WHERE email='x@example.org'")["email_verified"] == 1   # via de maillink bewezen
+
+
+def test_taggen_jeugd_profiel_en_export(omgeving):
+    c, db = omgeving["c"], omgeving["db"]
+    u = registreer_en_bevestig(c, db, "lid@example.org", "Lid")
+    db.db().execute("UPDATE users SET trusted=1 WHERE id=?", (u["id"],))
+    f = upload(c, "nk-slalom-2024", jpeg((90, 90, 90))).json()["foto"]
+    # deelnemers eerst in de suggesties, ook zonder zoekterm
+    lst = c.get("/api/riders?wedstrijd=nk-slalom-2024").json()
+    assert [r["id"] for r in lst] == ["jan-jansen", "kim-de-jong"] and all(r["deelnemer"] for r in lst)
+    assert c.get("/api/riders?wedstrijd=nk-slalom-2024&q=vries").json()[0]["id"] == "piet-de-vries"
+    # vertrouwd account tagt een volwassen rider: direct zichtbaar, ook op de riderpagina
+    r = c.post(f"/api/foto/{f['id']}/tag", data={"csrf": csrf_van(c, "/account"), "person_id": "jan-jansen"})
+    assert r.status_code == 200 and r.json()["tag"]["status"] == "zichtbaar"
+    assert c.post(f"/api/foto/{f['id']}/tag", data={"csrf": csrf_van(c, "/account"), "person_id": "jan-jansen"}).status_code == 409
+    anoniem = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(omgeving["app"])
+    assert anoniem.get("/api/rider/jan-jansen").json()["n"] == 1
+    assert anoniem.get("/api/wedstrijd/nk-slalom-2024").json()["fotos"][0]["tags"] == [{"person": "jan-jansen", "name": "Jan Jansen"}]
+    # jeugd: de tag wacht, ook al is de tagger vertrouwd
+    r = c.post(f"/api/foto/{f['id']}/tag", data={"csrf": csrf_van(c, "/account"), "person_id": "kim-de-jong"})
+    assert r.json()["tag"]["status"] == "wacht"
+    assert anoniem.get("/api/rider/kim-de-jong").json()["n"] == 0
+    # vrije naam
+    r = c.post(f"/api/foto/{f['id']}/tag", data={"csrf": csrf_van(c, "/account"), "naam": "Onbekende Surfer"})
+    assert r.json()["tag"]["status"] == "zichtbaar" and r.json()["tag"]["person"] is None
+    # de jeugdrider claimt haar naam en keurt de tag zelf goed
+    k = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(omgeving["app"])
+    registreer_en_bevestig(k, db, "kim@example.org", "Kim")
+    a = admin_client(omgeving)
+    a.post("/beheer/code", data={"csrf": csrf_van(a, "/beheer"), "person_id": "kim-de-jong"})
+    k.post("/claim/code", data={"csrf": csrf_van(k, "/claim"), "code": db.one("SELECT code FROM claim_codes")["code"]})
+    html = k.get("/account").text
+    assert "Wacht op jouw goedkeuring" in html
+    tid = db.one("SELECT id FROM tags WHERE person_id='kim-de-jong'")["id"]
+    assert "Tags in de wachtrij" in a.get("/beheer?tab=wachtrij").text
+    r = k.post(f"/api/tag/{tid}/goedkeuren", data={"csrf": csrf_van(k, "/account"), "terug": "/account"})
+    assert r.status_code == 200 and anoniem.get("/api/rider/kim-de-jong").json()["n"] == 1
+    # 'toon geen foto's op mijn profiel': riderpagina leeg en naam weg bij de foto
+    k.post("/account/profiel", data={"csrf": csrf_van(k, "/account"), "verberg": "1"})
+    assert anoniem.get("/api/rider/kim-de-jong").json()["n"] == 0
+    assert "Kim de Jong" not in anoniem.get(f"/foto/{f['id']}").text
+    assert {t["person"] for t in anoniem.get("/api/wedstrijd/nk-slalom-2024").json()["fotos"][0]["tags"]} == {"jan-jansen", None}
+    k.post("/account/profiel", data={"csrf": csrf_van(k, "/account"), "verberg": "0"})
+    assert anoniem.get("/api/rider/kim-de-jong").json()["n"] == 1
+    # een nieuw (niet vertrouwd) account: tag wacht; de uploader mag hem weghalen
+    n = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(omgeving["app"])
+    registreer_en_bevestig(n, db, "nieuw@example.org", "Nieuw")
+    r = n.post(f"/api/foto/{f['id']}/tag", data={"csrf": csrf_van(n, "/account"), "person_id": "piet-de-vries"})
+    assert r.json()["tag"]["status"] == "wacht"
+    tid2 = r.json()["tag"]["id"]
+    assert n.post(f"/api/tag/{tid}/verwijder", data={"csrf": csrf_van(n, "/account")}).status_code == 403   # niet zijn tag
+    assert c.post(f"/api/tag/{tid2}/verwijder", data={"csrf": csrf_van(c, "/account")}).json()["ok"] is True   # uploader wel
+    # wedstrijd met alleen jeugdklassen: tag wacht
+    f2 = upload(c, "kids-cup-2025", jpeg((91, 91, 91))).json()["foto"]
+    assert c.post(f"/api/foto/{f2['id']}/tag", data={"csrf": csrf_van(c, "/account"), "person_id": "jan-jansen"}).json()["tag"]["status"] == "wacht"
+    # export in media.json-formaat
+    ex = anoniem.get("/api/export/nk-slalom-2024").json()
+    assert ex["n"] == 1 and ex["files"][0]["sha256"] and ex["files"][0]["people"] == ["jan-jansen", "kim-de-jong"] and ex["files"][0]["in_repo"] is False
+    assert "Fotografen" in anoniem.get("/").text
 
 
 def test_testset_en_pagina(omgeving, monkeypatch):

@@ -98,7 +98,9 @@ Staat de funnel op een ander adres dan `https://homelab257.tailc2d973.ts.net:100
 
 ## Bijwerken
 
-Na een push naar `main` bouwt GitHub een nieuw image. Op de Unraid: **DOCKER** → klik op het icoon van `windsurf-foto` → **Force update** (of **Check for Updates** bovenaan). Database en foto's staan in de twee mappen en blijven staan.
+Na een push naar `main` bouwt GitHub een nieuw image. Op de Unraid: **DOCKER** → klik op het icoon van `windsurf-foto` → **Force update** (of **Check for Updates** bovenaan). Database en foto's staan in de twee mappen en blijven staan; nieuwe kolommen in de database worden bij het opstarten zelf toegevoegd.
+
+Welke versie er draait staat op `/api/health` (`versie`). Versie 0.3.0 = taggen (F3) en de export voor `media/media.json`.
 
 ## Back-up
 

@@ -10,8 +10,10 @@ Wat de dienst doet (fase F0 t/m F2):
 - Uploaden: wedstrijd kiezen, foto's slepen, licentie en toestemming aanvinken; nieuwe accounts komen in de wachtrij, riders en vertrouwde accounts publiceren direct.
 - Beheer op `/beheer`: wachtrij, meldingen, claims en claimcodes, accounts (vertrouwd, blokkeren), log, mail-outbox, archiefkoppeling.
 - Een testset van 60 foto's (`/api/test`) voor de bandbreedtemeting van F0.
+- Taggen wie erop staat (F3): per foto een naam uit het archief (deelnemers van de wedstrijd staan bovenaan) of een vrije naam; `/api/rider/<id>` geeft de foto's voor de riderpagina van de site. Jeugdregel: een tag op een rider die alleen in jeugdklassen voorkomt, of bij een wedstrijd met alleen jeugdklassen, wacht tot de rider zelf of de beheerder hem goedkeurt. Een rider kan tags van zichzelf weghalen en instellen dat er geen foto's op zijn profiel staan (dan ook geen naam bij foto's).
+- Export in het formaat van `media/media.json` (`/api/export/<slug>`), voor `tools/foto_manifest.py` in de archief-repo (F4).
 
-Nog niet (F3 en verder): taggen wie op een foto staat, foto's op de riderpagina, export naar `media/media.json`.
+Nog niet: video-links, statistieken per wedstrijd op de site, controle van de hashes op de NAS vanuit `archive.py verify`.
 
 ## Hoe het samenhangt
 
@@ -60,6 +62,7 @@ app/main.py            app, opstart (beheeraccount, testset), koppen, foutpagina
 app/routes_public.py   /api/*, /i/<key>/<t|m>.jpg, /o/<id>, /, /wedstrijd/<slug>, /foto/<id>, melden
 app/routes_account.py  registreren, bevestigen, inloggen, wachtwoord, /account, /claim, /upload, /api/upload, bewerken, verwijderen
 app/routes_admin.py    /beheer en alle beheeracties
+app/routes_tags.py     taggen: /api/foto/<id>/tag, /api/tag/<id>/verwijder, /api/tag/<id>/goedkeuren, /account/profiel
 app/images.py          herkennen, hash, EXIF, verkleinen, testset
 app/archive.py         wedstrijden en riders ophalen van de site
 app/auth.py            wachtwoorden (scrypt), sessiecookie, csrf, limiet per adres

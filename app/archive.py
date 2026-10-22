@@ -103,9 +103,33 @@ def event_naam(slug):
     return e["name"] if e else slug
 
 
-def zoek_riders(q: str, limiet=12):
+def deelnemers(slug) -> set:
+    """De riders die in deze wedstrijd hebben meegevaren (uit de uitslagen): de eerste suggestie bij het taggen."""
+    e = event(slug)
+    return set(e.get("riders") or []) if e else set()
+
+
+def rider_youth(pid) -> bool:
+    """True als de rider in het archief alleen in jeugd- of kidsklassen voorkomt (vlag uit riders.json)."""
+    r = rider(pid)
+    return bool(r and r.get("youth"))
+
+
+def event_youth_only(slug) -> bool:
+    """True als alle klassen van de wedstrijd jeugdklassen zijn."""
+    e = event(slug)
+    if not e or not e.get("classes"): return False
+    return set(e["classes"]) <= set(e.get("youth_classes") or [])
+
+
+def zoek_riders(q: str, limiet=12, slug=None):
+    """Zoekt riders op naam, alias of zeilnummer. Met slug komen de deelnemers van die wedstrijd eerst; zonder zoekterm geeft
+    dat de hele deelnemerslijst."""
     toks = norm(q).split()
-    if not toks: return []
+    deel = deelnemers(slug) if slug else set()
+    if not toks:
+        if not deel: return []
+        return sorted((r for pid, r in riders().items() if pid in deel), key=lambda r: r["name"])[:max(limiet, 80)]
     uit = []
     for r in riders().values():
         hooi = " " + norm(r["name"] + " " + " ".join(r.get("aliases", []))) + " "
@@ -116,7 +140,7 @@ def zoek_riders(q: str, limiet=12):
             elif (" " + t) in hooi: score += 2
             elif t in hooi or t in zeilen: score += 1
             else: score = 0; break
-        if score: uit.append((score, r))
+        if score: uit.append((score + (10 if r["id"] in deel else 0), r))
     uit.sort(key=lambda p: (-p[0], p[1]["name"]))
     return [r for _, r in uit[:limiet]]
 
