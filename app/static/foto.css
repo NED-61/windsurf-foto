@@ -20,7 +20,10 @@ button.link:hover { text-decoration: underline; }
 .badge { display: inline-block; padding: 0 .4em; border-radius: 3px; font-size: .75rem; background: var(--mut); color: #fff; vertical-align: middle; }
 .ft .badge { position: absolute; left: 4px; top: 4px; }
 .badge-wacht { background: #b7791f; }
-.badge-verborgen, .badge-verwijderd { background: #b3261e; }
+.badge-verborgen, .badge-verwijderd, .badge-rood { background: #b3261e; }
+.badge-oranje, .badge-fout { background: #b7791f; }
+.ft.vaag img, .ft.vaag:hover img { filter: blur(14px); }   /* naaktcheck: in het beheer alleen vaag tonen */
+.ft.vaag { overflow: hidden; }
 .ft-b .acties, .melding .acties, .block .acties { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .3rem; align-items: center; }
 .ft-b .acties form { display: flex; gap: .2rem; }
 input.klein { font: inherit; font-size: .85rem; padding: .15rem .4rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); max-width: 11rem; }

@@ -7,7 +7,26 @@
 </nav>
 
 {% if tab == 'wachtrij' %}
-{% if not groepen %}<p class="muted">De wachtrij is leeg.</p>{% endif %}
+{% if naaktcheck != 'aan' %}<p class="flash warn">Naaktcheck: {{ naaktcheck }}. Nieuwe foto's van vertrouwde accounts worden nu niet gecontroleerd{% if naaktcheck != 'uit' %} en gaan voor de zekerheid naar de wachtrij{% endif %}.</p>{% endif %}
+{% if naakt %}
+<section class="block">
+  <div class="block-h"><h2>Naaktcheck: eerst bekijken <span class="pill">{{ naakt|length }}</span></h2></div>
+  <p class="small muted">Tegengehouden bij het uploaden, ook als het account vertrouwd is. Topless hoort niet op de site: vals alarm (bikini, wetsuit, een man) keur je goed, de rest verberg je. Deze foto's gaan nooit mee met "alles goedkeuren". De thumbnails zijn vaag; klik voor de foto zelf.</p>
+  <div class="fotos-grid beheer-grid">
+  {% for f in naakt %}
+    <div class="ft-b">
+      <a class="ft vaag" href="/foto/{{ f.id }}"><img loading="lazy" src="/i/{{ f.key }}/t.jpg" width="{{ f.tw }}" height="{{ f.th }}" alt=""><span class="badge badge-{{ f.naakt }}">{{ {'rood': 'bloot', 'oranje': 'mogelijk bloot', 'fout': 'niet gecontroleerd'}[f.naakt] }}</span></a>
+      <p class="small">{{ f.uname }} · {{ event_naam(f.wedstrijd) }}{% if f.naakt_detail %}<br><span class="muted">{{ f.naakt_detail }}</span>{% endif %}</p>
+      <div class="acties">
+        <form method="post" action="/beheer/foto/{{ f.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><button class="btn btn-klein" type="submit">Vals alarm: OK</button></form>
+        <form method="post" action="/beheer/foto/{{ f.id }}/verbergen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><input name="reden" placeholder="reden" class="klein" value="hoort niet op de site"><button class="btn btn-klein btn-stil" type="submit">Verberg</button></form>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% if not groepen and not naakt %}<p class="muted">De wachtrij is leeg.</p>{% endif %}
 {% for (uid, uname, uemail, slug), fotos in groepen.items() %}
 <section class="block">
   <div class="block-h"><h2>{{ uname }} <small class="muted">{{ uemail }}</small>: <a href="/wedstrijd/{{ slug }}">{{ event_naam(slug) }}</a></h2>
@@ -98,7 +117,7 @@
 <tr{% if a.blocked %} class="geblokkeerd"{% endif %}>
   <td><a href="/beheer?tab=log&account={{ a.id }}">{{ a.name }}</a></td><td>{{ a.email }}{% if not a.email_verified %} <span class="badge badge-wacht">onbevestigd</span>{% endif %}</td>
   <td>{% if a.person_id %}{{ rider_naam(a.person_id) }}{% endif %}</td>
-  <td>{% if a.role == 'admin' %}admin{% elif a.blocked %}geblokkeerd{% elif a.trusted %}vertrouwd{% else %}nieuw{% endif %}</td>
+  <td>{% if a.role == 'admin' %}admin{% elif a.blocked %}geblokkeerd{% elif a.trusted %}vertrouwd{% else %}nieuw{% endif %}{% if a.upload_pauze %} <span class="badge badge-rood">uploads gepauzeerd</span>{% endif %}</td>
   <td class="num">{{ a.n_zichtbaar }}</td><td class="num">{{ a.n_wacht }}</td><td class="num">{{ a.n_weg }}</td><td class="num">{{ a.n_meldingen }}</td><td>{{ a.created_at|datum }}</td>
   <td class="acties">
     {% if a.id != user.id %}
@@ -106,6 +125,7 @@
     {% else %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/vertrouwd"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein">Vertrouwd</button></form>{% endif %}
     {% if a.blocked %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/deblokkeren"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein btn-stil">Deblokkeren</button></form>
     {% else %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/blokkeren" onsubmit="return confirm('Account blokkeren? Alle foto\'s van dit account worden verborgen.')"><input type="hidden" name="csrf" value="{{ csrf }}"><input name="reden" placeholder="reden" class="klein"><button class="btn btn-klein btn-stil">Blokkeren</button></form>{% endif %}
+    {% if a.upload_pauze %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/pauze-opheffen"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein">Uploaden weer toestaan</button></form>{% endif %}
     {% if a.person_id %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/ontkoppelen"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein btn-stil">Ontkoppelen</button></form>{% endif %}
     {% if a.n_wacht %}<form class="inline" method="post" action="/beheer/account/{{ a.id }}/goedkeuren-alles"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn btn-klein">Alles goedkeuren</button></form>{% endif %}
     {% endif %}

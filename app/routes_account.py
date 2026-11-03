@@ -6,8 +6,9 @@ import shutil
 
 from fastapi import APIRouter, Request, HTTPException, Form, File, UploadFile
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
-from . import config, db, auth, images, archive, web, mail
+from . import config, db, auth, images, archive, web, mail, naakt
 
 router = APIRouter()
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
@@ -265,6 +266,8 @@ def herkomst_check(herkomst, fotograaf, licentie, naam_uploader):
 async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str = Form("archief"), fotograaf: str = Form(""), toestemming: str = Form(""),
                      herkomst: str = Form("eigen"), csrf: str = Form(""), bestand: UploadFile = File(...)):
     u = auth.require_verified(request); auth.check_csrf(request, csrf)
+    if u["upload_pauze"]:
+        raise HTTPException(403, "Je uploads staan even stil tot de beheerder je vorige foto heeft bekeken. Je hoort het per mail.")
     if toestemming != "ja": raise HTTPException(400, "Vink de verklaring over de foto's aan.")
     herkomst, credit, licentie = herkomst_check(herkomst, fotograaf, licentie, u["name"])
     ev = archive.event(wedstrijd)
@@ -309,15 +312,26 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
     except Exception as e:  # noqa: BLE001
         orig.unlink(missing_ok=True); images.verwijder_verkleind(key)
         raise HTTPException(415, f"De foto kon niet verwerkt worden ({type(e).__name__}).")
-    status = "zichtbaar" if direct else "wacht"
+    niveau, detail = await run_in_threadpool(naakt.check, images.derived_dir(key) / "m.jpg")
+    status = "zichtbaar" if direct and naakt.zichtbaar_mag(niveau) else "wacht"
     cur = db.db().execute(
-        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,rights_basis,status,status_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (key, wedstrijd, u["id"], sha, ext, rel, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, herkomst, status, db.now()))
+        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,rights_basis,status,status_at,naakt,naakt_detail) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (key, wedstrijd, u["id"], sha, ext, rel, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, herkomst, status, db.now(),
+         niveau, detail or None))
     fid = cur.lastrowid
     db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {herkomst}; {bestand.filename}; {grootte} bytes")
-    if status == "wacht": _wachtrij_melding()
+    if not naakt.zichtbaar_mag(niveau):
+        db.log(f"naakt.{niveau}", u["id"], photo_id=fid, event_slug=wedstrijd, detail=detail)
+    if niveau == "rood":
+        if not direct: db.db().execute("UPDATE users SET upload_pauze=1 WHERE id=?", (u["id"],))
+        mail.mail_admins("Naaktcheck: foto tegengehouden", f"De naaktcheck heeft een foto van {u['name']} ({u['email']}) tegengehouden ({detail}). "
+                         + ("Het account kan niet verder uploaden tot je hebt gekeken." if not direct else "") + f"\n\n{config.APP_URL}/beheer?tab=wachtrij\n")
+    elif status == "wacht": _wachtrij_melding()
     row = db.one("SELECT * FROM photos WHERE id=?", fid)
-    return {"ok": True, "foto": web.foto_json(row, met_status=True), "waarschuwing": _datum_waarschuwing(info["taken_at"], ev)}
+    waarschuwing = _datum_waarschuwing(info["taken_at"], ev)
+    if direct and status == "wacht":      # vertrouwd, maar tegengehouden door de naaktcheck: zonder uitleg over waarom
+        waarschuwing = "; ".join(x for x in ("deze foto wordt eerst door de beheerder bekeken", waarschuwing) if x)
+    return {"ok": True, "foto": web.foto_json(row, met_status=True), "waarschuwing": waarschuwing}
 
 
 def _wachtrij_melding():

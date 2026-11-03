@@ -3,11 +3,12 @@ import secrets
 
 from fastapi import APIRouter, Request, HTTPException, Form
 
-from . import config, db, auth, archive, web, mail
+from . import config, db, auth, archive, web, mail, naakt
 from .routes_account import verwijder_foto
 
 router = APIRouter()
 TABS = ("wachtrij", "meldingen", "claims", "accounts", "log", "mail", "archief")
+GEVLAGD = "p.naakt IN ('oranje','rood','fout')"   # tegengehouden door de naaktcheck: alleen per foto goed te keuren, nooit met "alles goedkeuren"
 
 
 @router.get("/beheer")
@@ -16,10 +17,14 @@ def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, 
     if tab not in TABS: tab = "wachtrij"
     ctx = {"tab": tab}
     if tab == "wachtrij":
-        rows = db.all_("SELECT p.*, u.name uname, u.email uemail, u.trusted utrusted FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' ORDER BY p.uploader_id, p.event_slug, p.id")
+        rows = db.all_(f"SELECT p.*, u.name uname, u.email uemail, u.trusted utrusted FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' AND NOT COALESCE({GEVLAGD}, 0) ORDER BY p.uploader_id, p.event_slug, p.id")
         groepen = {}
         for r in rows: groepen.setdefault((r["uploader_id"], r["uname"], r["uemail"], r["event_slug"]), []).append(web.foto_json(r, met_status=True))
         ctx["groepen"] = groepen
+        ctx["naakt"] = [dict(web.foto_json(r, met_status=True), naakt=r["naakt"], naakt_detail=r["naakt_detail"], uname=r["uname"], uemail=r["uemail"])
+                        for r in db.all_(f"SELECT p.*, u.name uname, u.email uemail FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' AND {GEVLAGD} "
+                                         "ORDER BY CASE p.naakt WHEN 'rood' THEN 0 WHEN 'fout' THEN 1 ELSE 2 END, p.id")]
+        ctx["naaktcheck"] = naakt.status()
         ctx["verborgen"] = db.all_("SELECT p.*, u.name uname FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='verborgen' ORDER BY p.status_at DESC LIMIT 100")
         ctx["tags_wacht"] = [dict(t, naam=t["name"] or archive.rider_naam(t["person_id"]), jeugd=bool(t["person_id"] and archive.rider_youth(t["person_id"])))
                              for t in db.all_("SELECT t.*, p.key, p.event_slug, u.name tagger FROM tags t JOIN photos p ON p.id=t.photo_id JOIN users u ON u.id=t.tagged_by WHERE t.status='wacht' ORDER BY t.id")]
@@ -72,7 +77,9 @@ def beheer_foto(request: Request, foto_id: int, actie: str, reden: str = Form(""
     reden = " ".join(reden.split())[:300]
     if actie == "goedkeuren":
         db.db().execute("UPDATE photos SET status='zichtbaar', status_reason=NULL, status_by=?, status_at=? WHERE id=?", (a["id"], db.now(), foto_id))
-        db.log("foto.goedgekeurd", a["id"], photo_id=foto_id, event_slug=r["event_slug"], target_user=r["uploader_id"])
+        db.log("foto.goedgekeurd", a["id"], photo_id=foto_id, event_slug=r["event_slug"], target_user=r["uploader_id"],
+               detail=f"naaktcheck {r['naakt']}: {r['naakt_detail'] or ''}" if r["naakt"] in ("oranje", "rood", "fout") else None)
+        if r["naakt"] == "rood": _pauze_klaar(r["uploader_id"], a["id"])
     elif actie == "verbergen":
         db.db().execute("UPDATE photos SET status='verborgen', status_reason=?, status_by=?, status_at=? WHERE id=?", (reden or None, a["id"], db.now(), foto_id))
         db.log("foto.verborgen", a["id"], photo_id=foto_id, event_slug=r["event_slug"], target_user=r["uploader_id"], detail=reden)
@@ -90,8 +97,8 @@ def beheer_foto(request: Request, foto_id: int, actie: str, reden: str = Form(""
 @router.post("/beheer/account/{uid}/goedkeuren-alles")
 def goedkeuren_alles(request: Request, uid: int, wedstrijd: str = Form(""), csrf: str = Form("")):
     a = auth.require_admin(request); auth.check_csrf(request, csrf)
-    sql, args = "SELECT id, event_slug FROM photos WHERE uploader_id=? AND status='wacht'", [uid]
-    if wedstrijd: sql += " AND event_slug=?"; args.append(wedstrijd)
+    sql, args = f"SELECT p.id, p.event_slug FROM photos p WHERE p.uploader_id=? AND p.status='wacht' AND NOT COALESCE({GEVLAGD}, 0)", [uid]
+    if wedstrijd: sql += " AND p.event_slug=?"; args.append(wedstrijd)
     rows = db.all_(sql, *args)
     for r in rows:
         db.db().execute("UPDATE photos SET status='zichtbaar', status_by=?, status_at=? WHERE id=?", (a["id"], db.now(), r["id"]))
@@ -100,7 +107,17 @@ def goedkeuren_alles(request: Request, uid: int, wedstrijd: str = Form(""), csrf
         naam = db.one("SELECT name FROM users WHERE id=?", uid)
         onderwerp, tekst = mail.foto_beslist(naam["name"] if naam else "", len(rows), True, "")
         _mail_uploader(uid, onderwerp, tekst)
-    return web.redirect("/beheer?tab=wachtrij", f"{len(rows)} foto's goedgekeurd.")
+    apart = db.one(f"SELECT COUNT(*) n FROM photos p WHERE p.uploader_id=? AND p.status='wacht' AND {GEVLAGD}", uid)["n"]
+    return web.redirect("/beheer?tab=wachtrij", f"{len(rows)} foto's goedgekeurd." + (f" {apart} van de naaktcheck staan er nog: die keur je per foto." if apart else ""))
+
+
+def _pauze_klaar(uid, door):
+    """De beheerder keurde een rode foto goed (vals alarm): uploadpauze opheffen als er van dit account geen rode foto meer in de
+    wachtrij staat. Bij verbergen blijft de pauze staan, ook als daarna een gewone foto wordt goedgekeurd (opheffen op het tabblad Accounts)."""
+    u = db.one("SELECT upload_pauze FROM users WHERE id=?", uid)
+    if u and u["upload_pauze"] and not db.one("SELECT 1 FROM photos WHERE uploader_id=? AND status='wacht' AND naakt='rood'", uid):
+        db.db().execute("UPDATE users SET upload_pauze=0 WHERE id=?", (uid,))
+        db.log("account.pauze-opgeheven", door, target_user=uid, detail="rode foto goedgekeurd (vals alarm)")
 
 
 @router.post("/beheer/claim/{claim_id}/{actie}")
@@ -146,7 +163,7 @@ def beheer_account(request: Request, uid: int, actie: str, reden: str = Form("")
     sql = {"vertrouwd": "UPDATE users SET trusted=1 WHERE id=?", "onvertrouwd": "UPDATE users SET trusted=0 WHERE id=?",
            "deblokkeren": "UPDATE users SET blocked=0, blocked_reason=NULL WHERE id=?",
            "admin": "UPDATE users SET role='admin', trusted=1, email_verified=1 WHERE id=?", "geen-admin": "UPDATE users SET role='lid' WHERE id=?",
-           "ontkoppelen": "UPDATE users SET person_id=NULL WHERE id=?"}.get(actie)
+           "ontkoppelen": "UPDATE users SET person_id=NULL WHERE id=?", "pauze-opheffen": "UPDATE users SET upload_pauze=0 WHERE id=?"}.get(actie)
     if actie == "blokkeren":
         with db.tx() as con:
             con.execute("UPDATE users SET blocked=1, blocked_reason=? WHERE id=?", (reden or None, uid))

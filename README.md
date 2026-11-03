@@ -12,6 +12,7 @@ Wat de dienst doet (fase F0 t/m F2):
 - Een testset van 60 foto's (`/api/test`) voor de bandbreedtemeting van F0.
 - Taggen wie erop staat (F3): per foto een naam uit het archief (deelnemers van de wedstrijd staan bovenaan) of een vrije naam; `/api/rider/<id>` geeft de foto's voor de riderpagina van de site. Jeugdregel: een tag op een rider die alleen in jeugdklassen voorkomt, of bij een wedstrijd met alleen jeugdklassen, wacht tot de rider zelf of de beheerder hem goedkeurt. Een rider kan tags van zichzelf weghalen en instellen dat er geen foto's op zijn profiel staan (dan ook geen naam bij foto's).
 - Export in het formaat van `media/media.json` (`/api/export/<slug>`), voor `tools/foto_manifest.py` in de archief-repo (F4).
+- Naaktcheck (0.4.0, `app/naakt.py`): elke upload gaat door NudeNet (MIT, model van 12 MB, draait in de container; er gaat geen foto naar buiten). Bedekt (bikini, wetsuit) en een blote mannenborst tellen niet. **Oranje** (blote borsten of billen, of een zwakke treffer op geslachtsdelen) en **rood** (duidelijk bloot) gaan altijd naar de wachtrij, ook bij vertrouwde accounts en de beheerder: topless hoort niet op de site. Bij rood krijgt de beheerder meteen een mail en kan een account dat niet vertrouwd is niet verder uploaden tot de beheerder keek (vals alarm goedkeuren heft dat op; anders 'Uploaden weer toestaan' op het tabblad Accounts). In de wachtrij staan ze in een eigen blok met vage thumbnails, en ze gaan nooit mee met 'alles goedkeuren'. Kan de check niet draaien (`fout`), dan gaat de foto ook naar de wachtrij. Foto's van voor 0.4.0 worden bij het opstarten één keer gecontroleerd. `/api/health` toont `naaktcheck: aan`. Het model kijkt op 320 pixels: iemand groot in beeld ziet het goed, een klein figuurtje ver weg op het water slecht.
 
 Nog niet: video-links, statistieken per wedstrijd op de site, controle van de hashes op de NAS vanuit `archive.py verify`.
 
@@ -53,6 +54,7 @@ Tests: `venv/Scripts/python -m pytest -q`.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | mail versturen (Hostinger: `smtp.hostinger.com`, 465) | leeg: mails blijven in de outbox op `/beheer?tab=mail` |
 | `SESSION_SECRET` | sleutel voor sessies; leeg = eenmalig aangemaakt in `DATA_DIR/secret.txt` | leeg |
 | `MAX_UPLOAD_MB`, `DAGLIMIET_NIEUW` | grootste upload; uploads per dag voor een nieuw account | 40, 50 |
+| `NAAKTCHECK` | `0` = naaktcheck uit (noodknop; dan volgt elke foto de gewone weg) | `1` |
 | `TESTSET` | `0` = de testset van F0 niet aanmaken | `1` |
 
 ## Indeling
@@ -64,6 +66,7 @@ app/routes_account.py  registreren, bevestigen, inloggen, wachtwoord, /account, 
 app/routes_admin.py    /beheer en alle beheeracties
 app/routes_tags.py     taggen: /api/foto/<id>/tag, /api/tag/<id>/verwijder, /api/tag/<id>/goedkeuren, /account/profiel
 app/images.py          herkennen, hash, EXIF, verkleinen, testset
+app/naakt.py           naaktcheck (NudeNet): groen, oranje, rood, fout
 app/archive.py         wedstrijden en riders ophalen van de site
 app/auth.py            wachtwoorden (scrypt), sessiecookie, csrf, limiet per adres
 app/mail.py            SMTP en outbox

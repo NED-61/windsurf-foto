@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   blocked_reason TEXT,
   person_id TEXT,                            -- goedgekeurde claim op een rider uit people.json
   hide_profile INTEGER NOT NULL DEFAULT 0,   -- rider wil geen foto's op zijn profiel en geen tags met zijn naam
+  upload_pauze INTEGER NOT NULL DEFAULT 0,   -- naaktcheck rood bij een account dat niet vertrouwd is: geen uploads tot de beheerder keek
   created_at TEXT NOT NULL,
   last_login TEXT
 );
@@ -64,7 +65,9 @@ CREATE TABLE IF NOT EXISTS photos (
   orig_public INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'wacht',      -- wacht | zichtbaar | verborgen | verwijderd
   status_reason TEXT, status_by INTEGER, status_at TEXT,
-  result_id TEXT
+  result_id TEXT,
+  naakt TEXT,                                -- naaktcheck: groen | oranje | rood | fout | uit (zie app/naakt.py); NULL = nog niet gecontroleerd
+  naakt_detail TEXT                          -- de treffers die meetelden, met score
 );
 CREATE INDEX IF NOT EXISTS photos_event ON photos(event_slug, status);
 CREATE INDEX IF NOT EXISTS photos_uploader ON photos(uploader_id, uploaded_at);
@@ -129,9 +132,12 @@ def _migreer(con):
     """Kolommen die na versie 0.2 zijn toegevoegd, voor een database die al bestond."""
     kol = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
     if "hide_profile" not in kol: con.execute("ALTER TABLE users ADD COLUMN hide_profile INTEGER NOT NULL DEFAULT 0")
+    if "upload_pauze" not in kol: con.execute("ALTER TABLE users ADD COLUMN upload_pauze INTEGER NOT NULL DEFAULT 0")
     kol = {r["name"] for r in con.execute("PRAGMA table_info(photos)")}
     if "orig_rel" not in kol: con.execute("ALTER TABLE photos ADD COLUMN orig_rel TEXT")
     if "rights_basis" not in kol: con.execute("ALTER TABLE photos ADD COLUMN rights_basis TEXT NOT NULL DEFAULT 'eigen'")
+    if "naakt" not in kol: con.execute("ALTER TABLE photos ADD COLUMN naakt TEXT")
+    if "naakt_detail" not in kol: con.execute("ALTER TABLE photos ADD COLUMN naakt_detail TEXT")
 
 
 def reset():

@@ -4,7 +4,7 @@ import re
 from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import config, db, auth, images, archive, web, mail
+from . import config, db, auth, images, archive, web, mail, naakt
 
 router = APIRouter()
 IMMUTABLE = {"Cache-Control": "public, max-age=2592000, immutable", "Timing-Allow-Origin": "*"}
@@ -16,7 +16,7 @@ KEY_RE = re.compile(r"^[0-9a-f]{16}$")
 @router.get("/api/health")
 def health():
     return {"ok": True, "dienst": "windsurf-foto", "versie": config.VERSIE, "tijd": db.now(),
-            "fotos": db.one("SELECT COUNT(*) n FROM photos WHERE status='zichtbaar'")["n"]}
+            "fotos": db.one("SELECT COUNT(*) n FROM photos WHERE status='zichtbaar'")["n"], "naaktcheck": naakt.status()}
 
 
 @router.get("/api/test")

@@ -6,7 +6,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSIE = "0.3.4"  # F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox: klik gaat naar de fotopagina
+VERSIE = "0.4.0"  # F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))                       # SSD: database, verkleinde versies, cache
 ORIG_DIR = Path(os.environ.get("ORIG_DIR", str(DATA_DIR / "orig")))        # harde schijven: de originelen
@@ -25,6 +25,7 @@ MAIL_FROM = os.environ.get("MAIL_FROM", SMTP_USER)
 
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "40"))
 DAGLIMIET_NIEUW = int(os.environ.get("DAGLIMIET_NIEUW", "50"))   # uploads per dag voor een account dat nog niet vertrouwd is
+NAAKTCHECK = os.environ.get("NAAKTCHECK", "1") != "0"            # 0 = naaktcheck uit (noodknop), zie app/naakt.py
 THUMB_PX = 400     # lange zijde thumbnail
 MEDIUM_PX = 1600   # lange zijde kijkversie
 JPEG_KWALITEIT = 82

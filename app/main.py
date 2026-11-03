@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config, db, auth, images, archive, web
+from . import config, db, auth, images, archive, web, naakt
 from .routes_public import router as public_router
 from .routes_account import router as account_router
 from .routes_admin import router as admin_router
@@ -27,6 +27,15 @@ def opstart():
     if os.environ.get("TESTSET", "1") == "1":
         threading.Thread(target=images.maak_testset, daemon=True).start()
     threading.Thread(target=_archief_en_migratie, daemon=True).start()
+    threading.Thread(target=_naakt_bestaande, daemon=True).start()
+
+
+def _naakt_bestaande():
+    """Foto's van voor de naaktcheck (0.4.0) alsnog beoordelen; daarna doet de upload het zelf."""
+    try:
+        naakt.controleer_bestaande()
+    except Exception as e:  # noqa: BLE001
+        db.log("naakt.bestaande_fout", detail=str(e)[:300])
 
 
 def _archief_en_migratie():
