@@ -2,11 +2,12 @@
 
 NudeNet zoekt per lichaamsdeel en zegt of het bedekt of bloot is. Uitkomst per foto:
 - groen: niets bloots gevonden. De foto volgt de gewone weg (nieuw account: wachtrij; vertrouwd: direct zichtbaar).
-- oranje: mogelijk bloot (blote borsten of billen, of een zwakke treffer op geslachtsdelen). Altijd eerst naar de wachtrij, ook bij
-  vertrouwde accounts en de beheerder: topless hoort niet op de site (keuze van Max, 3 november 2026). Vals alarm keurt de beheerder goed.
-- rood: duidelijk bloot (geslachtsdelen). Wachtrij met een rood label, meteen een mail naar de beheerder, en een account dat niet
-  vertrouwd is kan pas weer uploaden als de beheerder heeft gekeken.
-- fout: de check kon niet draaien. Voor de zekerheid ook naar de wachtrij.
+- oranje: mogelijk bloot (blote borsten of billen, of een zwakke treffer op geslachtsdelen).
+- rood: duidelijk bloot (geslachtsdelen).
+  Oranje en rood worden bij het uploaden geweigerd, voor iedereen, en niet bewaard: geen origineel, geen kijkversie, alleen een logregel
+  (keuze van Max, 3 november 2026: topless hoort niet op de site; "weiger naaktfotos in de upload volledig"). Bij rood krijgt de beheerder
+  een mail, en een account dat niet vertrouwd is kan pas weer uploaden als de beheerder dat op het tabblad Accounts toestaat.
+- fout: de check kon niet draaien. Dan gaat de foto voor de zekerheid naar de wachtrij (weigeren zou al het uploaden stilleggen).
 - uit: NAAKTCHECK=0 (noodknop); dan telt de foto als groen.
 Bedekt (bikini, zwembroek, wetsuit) en een blote mannenborst tellen niet. Het model kijkt op 320 pixels: een klein figuurtje ver weg op
 het water ziet het slecht, een foto waarop iemand groot in beeld is goed. Er wordt nooit automatisch iets verwijderd.
@@ -21,6 +22,9 @@ ORANJE = {"FEMALE_BREAST_EXPOSED", "BUTTOCKS_EXPOSED"}
 ROOD_MIN = 0.5      # vanaf deze score is een treffer op ROOD duidelijk
 ORANJE_MIN = 0.3    # vanaf deze score telt een treffer op ORANJE (en een zwakke op ROOD) als twijfel
 NIVEAUS = ("groen", "oranje", "rood", "fout", "uit")
+WEIGEREN = {"oranje", "rood"}   # bij het uploaden geweigerd en niet bewaard (keuze van Max, 3 november 2026: "weiger naaktfotos in de upload volledig")
+WEIGER_TEKST = ("Deze foto is niet geplaatst: hij lijkt bloot te zijn, en dat hoort niet op deze site. De foto is niet bewaard. "
+                "Is dit een vergissing (bijvoorbeeld een wetsuit of een bikini), laat het dan weten aan de beheerder van het archief.")
 LABEL_NL = {"FEMALE_GENITALIA_EXPOSED": "geslachtsdeel (v)", "MALE_GENITALIA_EXPOSED": "geslachtsdeel (m)", "ANUS_EXPOSED": "anus",
             "FEMALE_BREAST_EXPOSED": "blote borst", "BUTTOCKS_EXPOSED": "blote billen"}
 
@@ -85,7 +89,7 @@ def zichtbaar_mag(niveau) -> bool:
 
 def controleer_bestaande() -> int:
     """Eenmalig bij het opstarten: foto's van voor de naaktcheck alsnog beoordelen. Een zichtbare foto die niet groen is gaat terug
-    naar de wachtrij (niet weg). Geeft het aantal beoordeelde foto's."""
+    naar de wachtrij (niet weg: hij stond er al, de beheerder beslist). Geeft het aantal beoordeelde foto's."""
     from . import db, images
     n = 0
     for r in db.all_("SELECT id, key, status, event_slug, uploader_id FROM photos WHERE naakt IS NULL AND status!='verwijderd'"):

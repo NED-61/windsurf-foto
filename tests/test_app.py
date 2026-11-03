@@ -334,23 +334,22 @@ def nep_detector(monkeypatch, treffers):
     monkeypatch.setattr(naakt, "_detecteer", lambda pad: treffers)
 
 
-def test_naaktcheck_oranje_ook_bij_vertrouwd(omgeving, monkeypatch):
-    c, db = omgeving["c"], omgeving["db"]
+def bestanden(map_):
+    import pathlib
+    return [p for p in pathlib.Path(map_).rglob("*") if p.is_file()]
+
+
+def test_naaktcheck_weigert_oranje_ook_bij_vertrouwd(omgeving, monkeypatch):
+    c, db, config = omgeving["c"], omgeving["db"], omgeving["config"]
     a = admin_client(omgeving)
     nep_detector(monkeypatch, [{"class": "FEMALE_BREAST_EXPOSED", "score": 0.71}, {"class": "FACE_FEMALE", "score": 0.9}])
     r = upload(a, "gpa-2025", jpeg((10, 120, 200), datum="2025:09:06 12:00:00"))
-    f = r.json()["foto"]
-    assert f["status"] == "wacht" and "eerst door de beheerder bekeken" in r.json()["waarschuwing"]
-    p = db.one("SELECT * FROM photos WHERE id=?", f["id"])
-    assert p["naakt"] == "oranje" and p["naakt_detail"] == "blote borst 0.71"
-    html = a.get("/beheer?tab=wachtrij").text
-    assert "Naaktcheck: eerst bekijken" in html and "mogelijk bloot" in html and 'class="ft vaag"' in html
-    # alles goedkeuren slaat hem over; per foto goedkeuren kan wel (vals alarm)
-    r = a.post(f"/beheer/account/{p['uploader_id']}/goedkeuren-alles", data={"csrf": csrf_van(a, "/beheer")})
-    assert "1 van de naaktcheck staan er nog" in r.text
-    assert db.one("SELECT status FROM photos WHERE id=?", f["id"])["status"] == "wacht"
-    a.post(f"/beheer/foto/{f['id']}/goedkeuren", data={"csrf": csrf_van(a, "/beheer"), "terug": "/beheer?tab=wachtrij"})
-    assert db.one("SELECT status FROM photos WHERE id=?", f["id"])["status"] == "zichtbaar"
+    assert r.status_code == 422 and "lijkt bloot" in r.json()["fout"] and "niet bewaard" in r.json()["fout"]
+    assert db.one("SELECT COUNT(*) n FROM photos")["n"] == 0
+    assert bestanden(config.ORIG_DIR) == [] and bestanden(config.DERIVED_DIR) == []     # niets bewaard: geen origineel, geen kijkversie
+    lg = db.one("SELECT * FROM log WHERE action='naakt.geweigerd'")
+    assert lg and lg["detail"].startswith("oranje; blote borst 0.71") and "sha256" in lg["detail"]
+    assert not db.one("SELECT * FROM outbox WHERE subject='Naaktcheck: upload geweigerd'")   # oranje: geen mail
     # bikini (bedekt) en een blote mannenborst tellen niet
     nep_detector(monkeypatch, [{"class": "FEMALE_BREAST_COVERED", "score": 0.8}, {"class": "BUTTOCKS_COVERED", "score": 0.6}, {"class": "MALE_BREAST_EXPOSED", "score": 0.9}])
     r = upload(a, "gpa-2025", jpeg((10, 200, 120), datum="2025:09:06 12:00:00"))
@@ -358,49 +357,41 @@ def test_naaktcheck_oranje_ook_bij_vertrouwd(omgeving, monkeypatch):
     assert db.one("SELECT naakt FROM photos WHERE id=?", r.json()["foto"]["id"])["naakt"] == "groen"
 
 
-def test_naaktcheck_rood_pauzeert_nieuw_account(omgeving, monkeypatch):
+def test_naaktcheck_rood_weigert_en_pauzeert_nieuw_account(omgeving, monkeypatch):
     c, db = omgeving["c"], omgeving["db"]
     lid = registreer_en_bevestig(c, db, "rommel@example.org", "Rommel")
     nep_detector(monkeypatch, [{"class": "MALE_GENITALIA_EXPOSED", "score": 0.83}])
     r = upload(c, "nk-slalom-2024", jpeg((90, 90, 90)))
-    f = r.json()["foto"]
-    assert f["status"] == "wacht"
-    assert db.one("SELECT naakt FROM photos WHERE id=?", f["id"])["naakt"] == "rood"
+    assert r.status_code == 422 and db.one("SELECT COUNT(*) n FROM photos")["n"] == 0
     assert db.one("SELECT upload_pauze FROM users WHERE id=?", lid["id"])["upload_pauze"] == 1
-    m = db.one("SELECT * FROM outbox WHERE to_addr='admin@example.org' AND subject='Naaktcheck: foto tegengehouden'")
-    assert m and "Rommel" in m["body"] and "kan niet verder uploaden" in m["body"]
+    m = db.one("SELECT * FROM outbox WHERE to_addr='admin@example.org' AND subject='Naaktcheck: upload geweigerd'")
+    assert m and "Rommel" in m["body"] and "niet bewaard" in m["body"] and "kan niet verder uploaden" in m["body"]
     nep_detector(monkeypatch, [])
     r = upload(c, "nk-slalom-2024", jpeg((91, 91, 91)))
     assert r.status_code == 403 and "staan even stil" in r.json()["fout"]
-    # verbergen: de pauze blijft; opheffen op het tabblad Accounts
+    # opheffen op het tabblad Accounts; daarna kan het weer
     a = admin_client(omgeving)
     assert "uploads gepauzeerd" in a.get("/beheer?tab=accounts").text
-    a.post(f"/beheer/foto/{f['id']}/verbergen", data={"csrf": csrf_van(a, "/beheer"), "reden": "hoort niet op de site", "terug": "/beheer?tab=wachtrij"})
-    assert db.one("SELECT upload_pauze FROM users WHERE id=?", lid["id"])["upload_pauze"] == 1
-    gewoon = db.one("SELECT id FROM photos WHERE uploader_id=? AND naakt IS NULL", lid["id"])
-    assert gewoon is None    # de tweede upload is geweigerd; een gewone foto goedkeuren mag de pauze niet opheffen:
-    db.db().execute("INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,uploaded_at,status,naakt) VALUES('k1','nk-slalom-2024',?,'s1','jpg','2026-01-01','wacht','groen')", (lid["id"],))
-    gid = db.one("SELECT id FROM photos WHERE key='k1'")["id"]
-    a.post(f"/beheer/foto/{gid}/goedkeuren", data={"csrf": csrf_van(a, "/beheer"), "terug": "/beheer?tab=wachtrij"})
-    assert db.one("SELECT upload_pauze FROM users WHERE id=?", lid["id"])["upload_pauze"] == 1
     a.post(f"/beheer/account/{lid['id']}/pauze-opheffen", data={"csrf": csrf_van(a, "/beheer")})
     assert db.one("SELECT upload_pauze FROM users WHERE id=?", lid["id"])["upload_pauze"] == 0
     assert upload(c, "nk-slalom-2024", jpeg((92, 92, 92))).status_code == 200
+    # vertrouwd (hier de beheerder): ook geweigerd en een mail, maar geen pauze
+    nep_detector(monkeypatch, [{"class": "FEMALE_GENITALIA_EXPOSED", "score": 0.9}])
+    assert upload(a, "gpa-2025", jpeg((93, 93, 93), datum="2025:09:06 12:00:00")).status_code == 422
+    assert db.one("SELECT upload_pauze FROM users WHERE email='admin@example.org'")["upload_pauze"] == 0
+    assert db.one("SELECT COUNT(*) n FROM outbox WHERE subject='Naaktcheck: upload geweigerd'")["n"] == 2
 
 
-def test_naaktcheck_vals_alarm_heft_pauze_op_en_zwakke_treffer_is_oranje(omgeving, monkeypatch):
+def test_naaktcheck_zwakke_treffer_is_oranje_en_geweigerd(omgeving, monkeypatch):
     c, db = omgeving["c"], omgeving["db"]
     lid = registreer_en_bevestig(c, db, "strand@example.org", "Strand")
-    nep_detector(monkeypatch, [{"class": "FEMALE_GENITALIA_EXPOSED", "score": 0.55}])
-    f = upload(c, "nk-slalom-2024", jpeg((200, 180, 150))).json()["foto"]
-    a = admin_client(omgeving)
-    a.post(f"/beheer/foto/{f['id']}/goedkeuren", data={"csrf": csrf_van(a, "/beheer"), "terug": "/beheer?tab=wachtrij"})
-    assert db.one("SELECT upload_pauze FROM users WHERE id=?", lid["id"])["upload_pauze"] == 0
-    assert db.one("SELECT * FROM log WHERE action='account.pauze-opgeheven'")
     nep_detector(monkeypatch, [{"class": "FEMALE_GENITALIA_EXPOSED", "score": 0.35}])
-    f = upload(c, "nk-slalom-2024", jpeg((201, 180, 150))).json()["foto"]
-    assert db.one("SELECT naakt FROM photos WHERE id=?", f["id"])["naakt"] == "oranje"
+    assert upload(c, "nk-slalom-2024", jpeg((201, 180, 150))).status_code == 422
+    assert db.one("SELECT detail FROM log WHERE action='naakt.geweigerd'")["detail"].startswith("oranje;")
     assert db.one("SELECT upload_pauze FROM users WHERE id=?", lid["id"])["upload_pauze"] == 0
+    # onder de drempel telt het niet
+    nep_detector(monkeypatch, [{"class": "FEMALE_GENITALIA_EXPOSED", "score": 0.25}])
+    assert upload(c, "nk-slalom-2024", jpeg((202, 180, 150))).json()["foto"]["status"] == "wacht"
 
 
 def test_naaktcheck_fout_en_bestaande_fotos(omgeving, monkeypatch):

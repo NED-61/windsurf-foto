@@ -313,6 +313,16 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
         orig.unlink(missing_ok=True); images.verwijder_verkleind(key)
         raise HTTPException(415, f"De foto kon niet verwerkt worden ({type(e).__name__}).")
     niveau, detail = await run_in_threadpool(naakt.check, images.derived_dir(key) / "m.jpg")
+    if niveau in naakt.WEIGEREN:
+        # lijkt bloot: geweigerd en niet bewaard, ook niet in de wachtrij (keuze van Max, 3 november 2026); alleen een logregel zonder beeld
+        orig.unlink(missing_ok=True); images.verwijder_verkleind(key)
+        db.log("naakt.geweigerd", u["id"], event_slug=wedstrijd, detail=f"{niveau}; {detail}; {(bestand.filename or '')[-120:]}; sha256 {sha[:16]}")
+        if niveau == "rood":
+            if not direct: db.db().execute("UPDATE users SET upload_pauze=1 WHERE id=?", (u["id"],))
+            mail.mail_admins("Naaktcheck: upload geweigerd", f"De naaktcheck heeft een upload van {u['name']} ({u['email']}) geweigerd ({detail}). De foto is niet bewaard. "
+                             + ("Het account kan niet verder uploaden tot je op het tabblad Accounts 'Uploaden weer toestaan' kiest of het blokkeert."
+                                if not direct else "") + f"\n\n{config.APP_URL}/beheer?tab=accounts\n")
+        raise HTTPException(422, naakt.WEIGER_TEKST)
     status = "zichtbaar" if direct and naakt.zichtbaar_mag(niveau) else "wacht"
     cur = db.db().execute(
         "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,rights_basis,status,status_at,naakt,naakt_detail) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -320,16 +330,12 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
          niveau, detail or None))
     fid = cur.lastrowid
     db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {herkomst}; {bestand.filename}; {grootte} bytes")
-    if not naakt.zichtbaar_mag(niveau):
+    if not naakt.zichtbaar_mag(niveau):        # de check kon niet draaien: voor de zekerheid naar de wachtrij
         db.log(f"naakt.{niveau}", u["id"], photo_id=fid, event_slug=wedstrijd, detail=detail)
-    if niveau == "rood":
-        if not direct: db.db().execute("UPDATE users SET upload_pauze=1 WHERE id=?", (u["id"],))
-        mail.mail_admins("Naaktcheck: foto tegengehouden", f"De naaktcheck heeft een foto van {u['name']} ({u['email']}) tegengehouden ({detail}). "
-                         + ("Het account kan niet verder uploaden tot je hebt gekeken." if not direct else "") + f"\n\n{config.APP_URL}/beheer?tab=wachtrij\n")
-    elif status == "wacht": _wachtrij_melding()
+    if status == "wacht": _wachtrij_melding()
     row = db.one("SELECT * FROM photos WHERE id=?", fid)
     waarschuwing = _datum_waarschuwing(info["taken_at"], ev)
-    if direct and status == "wacht":      # vertrouwd, maar tegengehouden door de naaktcheck: zonder uitleg over waarom
+    if direct and status == "wacht":      # vertrouwd, maar de naaktcheck kon niet draaien
         waarschuwing = "; ".join(x for x in ("deze foto wordt eerst door de beheerder bekeken", waarschuwing) if x)
     return {"ok": True, "foto": web.foto_json(row, met_status=True), "waarschuwing": waarschuwing}
 
