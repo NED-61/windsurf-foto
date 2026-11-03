@@ -82,3 +82,12 @@ input.klein { font: inherit; font-size: .85rem; padding: .15rem .4rem; border: 1
 @media (max-width: 40rem) { .melding { grid-template-columns: 1fr; } }
 .mail pre { white-space: pre-wrap; font-size: .85rem; background: var(--hover); padding: .5rem .75rem; border-radius: 4px; }
 code { font-size: .9em; }
+/* bezoekersteller (beheer, tabblad Bezoek) */
+.kpis { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
+.kpis div { border: 1px solid var(--line); border-radius: 4px; padding: .6rem .9rem; min-width: 10rem; display: flex; flex-direction: column; }
+.kpis strong { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.kpis small { color: var(--mut); }
+.balk-cel { width: 40%; }
+.balk-tel { display: block; height: .6rem; background: var(--link); border-radius: 2px; min-width: 1px; }
+.tabs-klein a { font-size: .9rem; }
+

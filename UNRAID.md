@@ -100,7 +100,7 @@ Staat de funnel op een ander adres dan `https://homelab257.tailc2d973.ts.net:100
 
 Na een push naar `main` bouwt GitHub een nieuw image. Op de Unraid: **DOCKER** → klik op het icoon van `windsurf-foto` → **Force update** (of **Check for Updates** bovenaan). Database en foto's staan in de twee mappen en blijven staan; nieuwe kolommen in de database worden bij het opstarten zelf toegevoegd.
 
-Welke versie er draait staat op `/api/health` (`versie`). Versie 0.3.0 = taggen (F3) en de export voor `media/media.json`. Versie 0.4.0 = naaktcheck: `/api/health` toont dan ook `"naaktcheck": "aan"`. Het image is daardoor ongeveer 110 MB groter (het model en onnxruntime); de eerste Force update duurt dus wat langer. Staat er `fout: ...`, dan gaan alle nieuwe foto's voor de zekerheid naar de wachtrij; zet in dat geval eventueel de variabele `NAAKTCHECK` op `0` tot het is opgelost.
+Welke versie er draait staat op `/api/health` (`versie`). Versie 0.3.0 = taggen (F3) en de export voor `media/media.json`. Versie 0.4.0 = naaktcheck: `/api/health` toont dan ook `"naaktcheck": "aan"`. Het image is daardoor ongeveer 110 MB groter (het model en onnxruntime); de eerste Force update duurt dus wat langer. Staat er `fout: ...`, dan gaan alle nieuwe foto's voor de zekerheid naar de wachtrij; zet in dat geval eventueel de variabele `NAAKTCHECK` op `0` tot het is opgelost. Versie 0.5.0 = bezoekersteller: het overzicht staat op `/beheer?tab=bezoek`; er hoeft niets ingesteld te worden.
 
 ## Back-up
 

@@ -27,24 +27,20 @@ def opstart():
     if os.environ.get("TESTSET", "1") == "1":
         threading.Thread(target=images.maak_testset, daemon=True).start()
     threading.Thread(target=_archief_en_migratie, daemon=True).start()
-    threading.Thread(target=_naakt_bestaande, daemon=True).start()
-
-
-def _naakt_bestaande():
-    """Foto's van voor de naaktcheck (0.4.0) alsnog beoordelen; daarna doet de upload het zelf."""
-    try:
-        naakt.controleer_bestaande()
-    except Exception as e:  # noqa: BLE001
-        db.log("naakt.bestaande_fout", detail=str(e)[:300])
 
 
 def _archief_en_migratie():
-    """Archieflijst laden en daarna originelen uit de oude indeling (op hash) verplaatsen naar <jaar>/<wedstrijd>/."""
+    """Archieflijst laden, originelen uit de oude indeling (op hash) verplaatsen naar <jaar>/<wedstrijd>/, en foto's van voor de
+    naaktcheck (0.4.0) alsnog beoordelen. Na elkaar in één taak: de database-verbinding is gedeeld."""
     archive.events()
     try:
         images.migreer_originelen(lambda slug: (archive.event(slug) or {}).get("year"))
     except Exception as e:  # noqa: BLE001
         db.log("originelen.migratie_fout", detail=str(e)[:300])
+    try:
+        naakt.controleer_bestaande()
+    except Exception as e:  # noqa: BLE001
+        db.log("naakt.bestaande_fout", detail=str(e)[:300])
 
 
 @asynccontextmanager

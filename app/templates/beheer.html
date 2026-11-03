@@ -3,7 +3,7 @@
 {% block inhoud %}
 <header class="ph"><h1>Beheer</h1></header>
 <nav class="tabs" aria-label="Beheer">
-{% for t in ['wachtrij', 'meldingen', 'claims', 'accounts', 'log', 'mail', 'archief'] %}<a href="/beheer?tab={{ t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ t|capitalize }}{% if t == 'wachtrij' and wachtrij_n %} <span class="pill">{{ wachtrij_n }}</span>{% endif %}</a>{% endfor %}
+{% for t in ['wachtrij', 'meldingen', 'claims', 'accounts', 'bezoek', 'log', 'mail', 'archief'] %}<a href="/beheer?tab={{ t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ t|capitalize }}{% if t == 'wachtrij' and wachtrij_n %} <span class="pill">{{ wachtrij_n }}</span>{% endif %}</a>{% endfor %}
 </nav>
 
 {% if tab == 'wachtrij' %}
@@ -150,6 +150,36 @@
 </details>
 {% endfor %}
 
+{% elif tab == 'bezoek' %}
+<nav class="tabs tabs-klein" aria-label="Site">{% for s, n in [('archief', 'Archief'), ('ned', "Andere pagina's op ned-61.com"), ('alles', 'Alles')] %}<a href="/beheer?tab=bezoek&site={{ s }}"{% if tel.site == s %} aria-current="page"{% endif %}>{{ n }}</a>{% endfor %}</nav>
+{% if not tel.sinds %}<p class="muted">Nog geen bezoeken geteld. De archiefsite telt vanaf de eerste build met de teller in <code>site.js</code>; een andere pagina telt mee met <code>&lt;script defer src="{{ cfg.APP_URL }}/static/tel.js"&gt;&lt;/script&gt;</code>.</p>
+{% else %}
+<div class="kpis">
+  <div><strong>{{ tel.vandaag.bezoekers }}</strong><span>bezoekers vandaag</span><small>{{ tel.vandaag.weergaven }} weergaven</small></div>
+  <div><strong>{{ tel.week.bezoekers }}</strong><span>laatste 7 dagen</span><small>{{ tel.week.weergaven }} weergaven</small></div>
+  <div><strong>{{ tel.maand.bezoekers }}</strong><span>laatste 30 dagen</span><small>{{ tel.maand.weergaven }} weergaven</small></div>
+</div>
+<p class="small muted">Een bezoeker telt één keer per dag (geen cookies, de code wisselt elke nacht): wie op drie dagen komt, telt in een week drie keer. Geteld sinds {{ tel.sinds }}.{% if tel.ip_door == 'nee' %} Let op: het IP-adres van de bezoeker komt vandaag niet door (de funnel geeft het niet door), dus bezoekers met dezelfde browser vallen samen; de aantallen bezoekers zijn dan te laag.{% endif %}</p>
+<section class="block"><div class="block-h"><h2>Per dag</h2></div>
+<table class="tbl"><thead><tr><th>Dag</th><th class="num">Bezoekers</th><th class="num">Weergaven</th><th></th></tr></thead><tbody>
+{% for d in tel.dagen %}<tr><td>{{ d.dag }}</td><td class="num">{{ d.bezoekers }}</td><td class="num">{{ d.weergaven }}</td><td class="balk-cel"><span class="balk-tel" style="width: {{ (100 * d.bezoekers / tel.max_dag)|round|int }}%"></span></td></tr>{% endfor %}
+</tbody></table></section>
+<section class="block"><div class="block-h"><h2>Meest bekeken (30 dagen)</h2></div>
+<table class="tbl"><thead><tr><th>Pagina</th><th class="num">Bezoekers</th><th class="num">Weergaven</th></tr></thead><tbody>
+{% for p in tel.paginas %}<tr><td><a href="https://ned-61.com{{ p.pad }}" rel="noopener">{{ p.naam }}</a></td><td class="num">{{ p.bezoekers }}</td><td class="num">{{ p.weergaven }}</td></tr>{% endfor %}
+</tbody></table></section>
+<section class="block"><div class="block-h"><h2>Waar ze vandaan komen (30 dagen)</h2></div>
+<table class="tbl"><thead><tr><th>Bron</th><th class="num">Bezoekers</th></tr></thead><tbody>
+{% for b in tel.bronnen %}<tr><td>{{ b.bron }}</td><td class="num">{{ b.bezoekers }}</td></tr>{% endfor %}
+</tbody></table>
+<p class="small muted">Direct = zonder verwijzer: een getypt adres, een bladwijzer of een link in WhatsApp. Klikken binnen de site tellen hier niet mee.</p></section>
+<section class="block"><div class="block-h"><h2>Apparaat (30 dagen)</h2></div>
+<p>{% for a, n, pct in tel.apparaten %}{{ a }} {{ pct }}% ({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}</p></section>
+<section class="block"><div class="block-h"><h2>Per maand</h2></div>
+<table class="tbl"><thead><tr><th>Maand</th><th class="num">Bezoekers</th><th class="num">Weergaven</th></tr></thead><tbody>
+{% for m, v, b in tel.maanden %}<tr><td>{{ m }}</td><td class="num">{{ b }}</td><td class="num">{{ v }}</td></tr>{% endfor %}
+</tbody></table></section>
+{% endif %}
 {% elif tab == 'archief' %}
 <div class="prose">
 <p>Wedstrijden en riders komen van <code>{{ status.bron }}/assets/wedstrijden.json</code> en <code>riders.json</code>. Nu in gebruik: {{ status.wedstrijden }} wedstrijden en {{ status.riders }} riders{% if status.opgehaald %}, opgehaald op {{ status.opgehaald|dt }}{% endif %}.</p>

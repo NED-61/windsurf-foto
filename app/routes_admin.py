@@ -3,16 +3,16 @@ import secrets
 
 from fastapi import APIRouter, Request, HTTPException, Form
 
-from . import config, db, auth, archive, web, mail, naakt
+from . import config, db, auth, archive, web, mail, naakt, teller
 from .routes_account import verwijder_foto
 
 router = APIRouter()
-TABS = ("wachtrij", "meldingen", "claims", "accounts", "log", "mail", "archief")
+TABS = ("wachtrij", "meldingen", "claims", "accounts", "bezoek", "log", "mail", "archief")
 GEVLAGD = "p.naakt IN ('oranje','rood','fout')"   # tegengehouden door de naaktcheck: alleen per foto goed te keuren, nooit met "alles goedkeuren"
 
 
 @router.get("/beheer")
-def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, wedstrijd: str = ""):
+def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, wedstrijd: str = "", site: str = "archief"):
     auth.require_admin(request)
     if tab not in TABS: tab = "wachtrij"
     ctx = {"tab": tab}
@@ -54,6 +54,8 @@ def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, 
     elif tab == "mail":
         ctx["mails"] = db.all_("SELECT * FROM outbox ORDER BY id DESC LIMIT 50")
         ctx["smtp"] = bool(config.SMTP_HOST)
+    elif tab == "bezoek":
+        ctx["tel"] = teller.overzicht(site if site in ("archief", "ned", "alles") else "archief")
     elif tab == "archief":
         ctx["status"] = archive.status()
     return web.render(request, "beheer.html", **ctx)

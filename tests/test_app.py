@@ -434,3 +434,64 @@ def test_naaktcheck_echt(omgeving):
     assert r.json()["foto"]["status"] == "zichtbaar"
     assert db.one("SELECT naakt FROM photos WHERE id=?", r.json()["foto"]["id"])["naakt"] == "groen"
     assert naakt.beoordeel([]) == ("groen", "")
+
+
+# ---------------------------------------------------------------- bezoekersteller (0.5.0)
+UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
+
+
+def tel(c, pad, ref="", w=390, origin="https://www.ned-61.com", ua=UA):
+    return c.post("/api/tel", content=json.dumps({"p": pad, "r": ref, "w": w}), headers={"Origin": origin, "User-Agent": ua, "Content-Type": "text/plain;charset=UTF-8"})
+
+
+def test_teller_telt_zonder_cookies(omgeving):
+    c, db = omgeving["c"], omgeving["db"]
+    r = tel(c, "/windsurf-archief/rider/jan-jansen.html?x=1", "https://www.google.nl/")
+    assert r.status_code == 204 and "set-cookie" not in r.headers
+    tel(c, "/windsurf-archief/wedstrijd/nk-slalom-2024.html", "https://ned-61.com/windsurf-archief/rider/jan-jansen.html")
+    tel(c, "/windsurf-archief/", "", w=1440, ua=UA.replace("iPhone", "Macintosh"))
+    tel(c, "/records/", "https://l.facebook.com/", w=800)
+    # telt niet: bot, ander domein, onzin, te groot
+    tel(c, "/windsurf-archief/", ua="Mozilla/5.0 (compatible; Googlebot/2.1)")
+    tel(c, "/windsurf-archief/", origin="https://andere-site.example")
+    c.post("/api/tel", content=b"geen json", headers={"Origin": "https://ned-61.com", "User-Agent": UA})
+    c.post("/api/tel", content=b"x" * 5000, headers={"Origin": "https://ned-61.com", "User-Agent": UA})
+    rows = db.all_("SELECT * FROM hits ORDER BY id")
+    assert len(rows) == 4
+    assert rows[0]["pad"] == "/windsurf-archief/rider/jan-jansen.html" and rows[0]["bron"] == "google" and rows[0]["apparaat"] == "telefoon" and rows[0]["site"] == "archief"
+    assert rows[1]["bron"] == "intern" and rows[1]["bezoeker"] == rows[0]["bezoeker"]           # zelfde browser, zelfde dag
+    assert rows[2]["bron"] is None and rows[2]["apparaat"] == "computer" and rows[2]["bezoeker"] != rows[0]["bezoeker"]
+    assert rows[3]["site"] == "ned" and rows[3]["bron"] == "facebook" and rows[3]["apparaat"] == "tablet"
+    assert not any("." in (r["bezoeker"] or "") for r in rows) and len(rows[0]["bezoeker"]) == 16   # geen IP-adres in de tabel
+    # nieuwe dag = nieuwe sleutel: dezelfde browser krijgt een andere code
+    from app import teller
+    oud = rows[0]["bezoeker"]
+    db.kv_set("tel.sleutel", "2000-01-01:" + "0" * 32)
+    tel(c, "/windsurf-archief/")
+    assert db.one("SELECT bezoeker FROM hits ORDER BY id DESC")["bezoeker"] != oud
+    # beheer: tabblad Bezoek met namen van rider en wedstrijd
+    a = admin_client(omgeving)
+    html = a.get("/beheer?tab=bezoek").text
+    assert "bezoekers vandaag" in html and "rider: Jan Jansen" in html and "wedstrijd: NK Slalom 2024" in html and "google" in html
+    o = teller.overzicht("archief")
+    assert o["vandaag"]["weergaven"] == 4 and o["vandaag"]["bezoekers"] == 3
+    assert teller.overzicht("ned")["vandaag"]["weergaven"] == 1
+    assert "Andere pagina" in a.get("/beheer?tab=bezoek&site=ned").text
+    assert c.get("/beheer?tab=bezoek").status_code in (200, 401, 403) and "bezoekers vandaag" not in c.get("/beheer?tab=bezoek").text
+
+
+def test_teller_samenvatten_en_limiet(omgeving, monkeypatch):
+    c, db = omgeving["c"], omgeving["db"]
+    from app import teller
+    import datetime
+    tel(c, "/windsurf-archief/")
+    db.db().execute("INSERT INTO hits(dag,uur,site,pad,bron,apparaat,bezoeker) VALUES('2024-01-05',10,'archief','/windsurf-archief/',NULL,'telefoon','aaaa'),"
+                    "('2024-01-05',11,'archief','/windsurf-archief/over.html',NULL,'telefoon','aaaa'),('2024-01-05',12,'archief','/windsurf-archief/',NULL,'computer','bbbb')")
+    assert teller.opruimen(datetime.date(2026, 11, 3)) == 3
+    t = db.one("SELECT * FROM hits_dagtotaal WHERE dag='2024-01-05'")
+    assert t["weergaven"] == 3 and t["bezoekers"] == 2
+    assert ["2024-01", 3, 2] in teller.overzicht("archief")["maanden"]
+    monkeypatch.setattr(teller, "MAX_PER_BEZOEKER", 3)
+    for _ in range(5): tel(c, "/windsurf-archief/riders.html")
+    assert db.one("SELECT COUNT(*) n FROM hits WHERE dag!='2024-01-05'")["n"] == 3
+    assert c.get("/static/tel.js").status_code == 200

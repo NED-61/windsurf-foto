@@ -2,9 +2,9 @@
 import re
 
 from fastapi import APIRouter, Request, HTTPException, Form
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import config, db, auth, images, archive, web, mail, naakt
+from . import config, db, auth, images, archive, web, mail, naakt, teller
 
 router = APIRouter()
 IMMUTABLE = {"Cache-Control": "public, max-age=2592000, immutable", "Timing-Allow-Origin": "*"}
@@ -185,3 +185,15 @@ def melden(request: Request, foto_id: int, reden: str = Form(...), csrf: str = F
     db.log("melding", u["id"] if u else None, photo_id=foto_id, event_slug=r["event_slug"], detail=reden)
     mail.mail_admins("Foto gemeld", f"Foto {config.APP_URL}/foto/{foto_id} is gemeld" + (f" door {u['name']}" if u else " (anoniem)") + f":\n\n{reden}\n\n{config.APP_URL}/beheer?tab=meldingen\n")
     return web.redirect(f"/foto/{foto_id}", "Bedankt, de melding is doorgegeven aan de beheerder.")
+
+
+@router.post("/api/tel")
+async def tel(request: Request):
+    """Bezoekersteller (app/teller.py): één paginaweergave, verstuurd met navigator.sendBeacon vanaf de archiefsite of een andere pagina
+    op ned-61.com. Antwoordt altijd 204, ook als de weergave niet telt; een bericht groter dan 2 kB wordt niet gelezen."""
+    body = b""
+    async for blok in request.stream():
+        body += blok
+        if len(body) > 2000: return Response(status_code=204)
+    teller.registreer(request.headers.get("origin"), request.client.host if request.client else None, request.headers.get("user-agent", ""), body)
+    return Response(status_code=204)
