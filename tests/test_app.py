@@ -471,6 +471,18 @@ def test_teller_telt_zonder_cookies(omgeving):
     assert c.get("/beheer?tab=bezoek").status_code in (200, 401, 403) and "bezoekers vandaag" not in c.get("/beheer?tab=bezoek").text
 
 
+def test_teller_eigen_domein(omgeving):
+    """Op windsurfarchief.nl staat het archief in de hoofdmap: het pad krijgt /windsurf-archief/ ervoor, zodat de cijfers per pagina doorlopen (0.5.3)."""
+    c, db = omgeving["c"], omgeving["db"]
+    assert tel(c, "/rider/jan-jansen.html", "https://www.google.nl/", origin="https://windsurfarchief.nl").status_code == 204
+    tel(c, "/", "https://windsurfarchief.nl/rider/jan-jansen.html", origin="https://www.windsurfarchief.nl")
+    rows = db.all_("SELECT * FROM hits ORDER BY id")
+    assert [r["pad"] for r in rows] == ["/windsurf-archief/rider/jan-jansen.html", "/windsurf-archief/"]
+    assert all(r["site"] == "archief" for r in rows) and rows[1]["bron"] == "intern"
+    j = c.get("/api/wedstrijd/nk-slalom-2024", headers={"Origin": "https://windsurfarchief.nl"})
+    assert j.headers["access-control-allow-origin"] == "https://windsurfarchief.nl"
+
+
 def test_teller_samenvatten_en_limiet(omgeving, monkeypatch):
     c, db = omgeving["c"], omgeving["db"]
     from app import teller

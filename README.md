@@ -50,7 +50,7 @@ Tests: `venv/Scripts/python -m pytest -q`.
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | het beheeraccount, aangemaakt bij de eerste start | (verplicht) |
 | `APP_URL` | het publieke adres van deze dienst, voor links in mails en in de api | `http://localhost:8000` |
 | `SITE_URL` | de archiefsite, waar `assets/wedstrijden.json` en `riders.json` staan | `https://www.ned-61.com/windsurf-archief` |
-| `SITE_ORIGINS` | sites die de api mogen aanroepen (CORS), kommagescheiden | `https://www.ned-61.com,https://ned-61.com` |
+| `SITE_ORIGINS` | sites die de api mogen aanroepen (CORS), kommagescheiden | `https://www.ned-61.com,https://ned-61.com,https://windsurfarchief.nl,https://www.windsurfarchief.nl` |
 | `DATA_DIR` | database, verkleinde versies, cache (SSD) | `/data` |
 | `ORIG_DIR` | originelen (harde schijven) | `/orig` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | mail versturen (Hostinger: `smtp.hostinger.com`, 465) | leeg: mails blijven in de outbox op `/beheer?tab=mail` |

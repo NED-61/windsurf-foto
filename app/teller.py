@@ -20,7 +20,8 @@ from . import config, db, archive
 
 NL = ZoneInfo("Europe/Amsterdam")
 ARCHIEF_PAD = "/windsurf-archief/"
-EIGEN_HOSTS = {"ned-61.com"}
+EIGEN_HOSTS = {"ned-61.com", "windsurfarchief.nl"}
+ARCHIEF_HOSTS = {"windsurfarchief.nl"}   # eigen domein van het archief (keuze van Max, 15 november 2026): daar staat de site in de hoofdmap
 BOT_RE = re.compile(r"bot|crawl|spider|slurp|preview|headless|lighthouse|pingdom|monitor|curl|wget|python|httpx|java/|go-http", re.I)
 BRONNEN = [(r"(^|\.)google\.[a-z.]+$", "google"), (r"(^|\.)bing\.com$", "bing"), (r"(^|\.)duckduckgo\.com$", "duckduckgo"),
            (r"(^|\.)(facebook\.com|fb\.me|fb\.com)$", "facebook"), (r"(^|\.)instagram\.com$", "instagram"), (r"^t\.co$|(^|\.)(x|twitter)\.com$", "x"),
@@ -97,6 +98,9 @@ def registreer(origin, ip, ua, body) -> bool:
         return False
     pad = pad.split("?")[0].split("#")[0][:300]
     if not pad.startswith("/"): return False
+    host = (urlsplit(origin).hostname or "").lower().removeprefix("www.")
+    if host in ARCHIEF_HOSTS and not pad.startswith(ARCHIEF_PAD):
+        pad = ARCHIEF_PAD.rstrip("/") + pad   # zelfde sleutel als op het oude adres: de cijfers per pagina lopen door na de verhuizing
     _schema()
     nu = _nu(); dag = nu.date().isoformat()
     try: publiek = bool(ip) and ipaddress.ip_address(ip).is_global
