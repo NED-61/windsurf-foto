@@ -468,6 +468,8 @@ def test_teller_telt_zonder_cookies(omgeving):
     assert o["vandaag"]["weergaven"] == 4 and o["vandaag"]["bezoekers"] == 3
     assert teller.overzicht("ned")["vandaag"]["weergaven"] == 1
     assert "Andere pagina" in a.get("/beheer?tab=bezoek&site=ned").text
+    assert teller.url_van("/windsurf-archief/rider/jan-jansen.html") == "https://windsurfarchief.nl/rider/jan-jansen.html"
+    assert teller.url_van("/weerstation/") == "https://ned-61.com/weerstation/"
     assert c.get("/beheer?tab=bezoek").status_code in (200, 401, 403) and "bezoekers vandaag" not in c.get("/beheer?tab=bezoek").text
 
 

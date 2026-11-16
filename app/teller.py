@@ -21,6 +21,7 @@ from . import config, db, archive
 NL = ZoneInfo("Europe/Amsterdam")
 ARCHIEF_PAD = "/windsurf-archief/"
 EIGEN_HOSTS = {"ned-61.com", "windsurfarchief.nl"}
+ARCHIEF_URL = "https://windsurfarchief.nl/"   # waar de archiefsite staat (16 november 2026); paden blijven /windsurf-archief/... zodat oude tellingen aansluiten
 ARCHIEF_HOSTS = {"windsurfarchief.nl"}   # eigen domein van het archief (keuze van Max, 15 november 2026): daar staat de site in de hoofdmap
 BOT_RE = re.compile(r"bot|crawl|spider|slurp|preview|headless|lighthouse|pingdom|monitor|curl|wget|python|httpx|java/|go-http", re.I)
 BRONNEN = [(r"(^|\.)google\.[a-z.]+$", "google"), (r"(^|\.)bing\.com$", "bing"), (r"(^|\.)duckduckgo\.com$", "duckduckgo"),
@@ -45,6 +46,11 @@ CREATE TABLE IF NOT EXISTS hits_dagtotaal (    -- samengevat na BEWAAR_DAGEN
   dag TEXT NOT NULL, site TEXT NOT NULL, weergaven INTEGER NOT NULL, bezoekers INTEGER NOT NULL, PRIMARY KEY (dag, site)
 );
 """
+
+
+def url_van(pad):
+    """Adres van een getelde pagina: archiefpaden op windsurfarchief.nl, de andere pagina's op ned-61.com."""
+    return ARCHIEF_URL + pad[len(ARCHIEF_PAD):] if pad.startswith(ARCHIEF_PAD) else "https://ned-61.com" + pad
 
 
 def _nu():
@@ -161,7 +167,7 @@ def overzicht(site="archief", dagen=30) -> dict:
         maanden[r["m"]] = [r["v"], r["b"]]
     for r in db.all_(f"SELECT substr(dag,1,7) m, SUM(weergaven) v, SUM(bezoekers) b FROM hits_dagtotaal WHERE 1=1 {w} GROUP BY m", *args):
         x = maanden.setdefault(r["m"], [0, 0]); x[0] += r["v"]; x[1] += r["b"]
-    paginas = [{"pad": r["pad"], "naam": label(r["pad"]), "weergaven": r["v"], "bezoekers": r["b"]}
+    paginas = [{"pad": r["pad"], "url": url_van(r["pad"]), "naam": label(r["pad"]), "weergaven": r["v"], "bezoekers": r["b"]}
                for r in db.all_(f"SELECT pad, COUNT(*) v, COUNT(DISTINCT dag || bezoeker) b FROM hits WHERE dag>=? {w} GROUP BY pad ORDER BY v DESC, pad LIMIT 30", van, *args)]
     bronnen = [{"bron": r["bron"] or "direct", "bezoekers": r["b"]}
                for r in db.all_(f"SELECT bron, COUNT(DISTINCT dag || bezoeker) b FROM hits WHERE dag>=? {w} AND COALESCE(bron,'')!='intern' GROUP BY bron ORDER BY b DESC LIMIT 20", van, *args)]

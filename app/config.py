@@ -6,12 +6,12 @@ import os
 import secrets
 from pathlib import Path
 
-VERSIE = "0.5.3"  # F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck (bloot = geweigerd), bezoekersteller, riderfoto's ook van wedstrijden met de rider, eigen domein windsurfarchief.nl
+VERSIE = "0.5.4"  # F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck (bloot = geweigerd), bezoekersteller, riderfoto's ook van wedstrijden met de rider, eigen domein windsurfarchief.nl (sinds 0.5.4 ook het standaardadres)
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))                       # SSD: database, verkleinde versies, cache
 ORIG_DIR = Path(os.environ.get("ORIG_DIR", str(DATA_DIR / "orig")))        # harde schijven: de originelen
 APP_URL = os.environ.get("APP_URL", "http://localhost:8000").rstrip("/")    # het publieke adres van deze dienst (funnel)
-SITE_URL = os.environ.get("SITE_URL", "https://www.ned-61.com/windsurf-archief").rstrip("/")   # de archiefsite
+SITE_URL = os.environ.get("SITE_URL", "https://windsurfarchief.nl").rstrip("/")   # de archiefsite (sinds 16 november 2026 op het eigen domein; het oude adres stuurt door)
 SITE_ORIGINS = [o.strip().rstrip("/") for o in os.environ.get("SITE_ORIGINS", "https://www.ned-61.com,https://ned-61.com,https://windsurfarchief.nl,https://www.windsurfarchief.nl").split(",") if o.strip()]
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")

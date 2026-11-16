@@ -166,7 +166,7 @@
 </tbody></table></section>
 <section class="block"><div class="block-h"><h2>Meest bekeken (30 dagen)</h2></div>
 <table class="tbl"><thead><tr><th>Pagina</th><th class="num">Bezoekers</th><th class="num">Weergaven</th></tr></thead><tbody>
-{% for p in tel.paginas %}<tr><td><a href="https://ned-61.com{{ p.pad }}" rel="noopener">{{ p.naam }}</a></td><td class="num">{{ p.bezoekers }}</td><td class="num">{{ p.weergaven }}</td></tr>{% endfor %}
+{% for p in tel.paginas %}<tr><td><a href="{{ p.url }}" rel="noopener">{{ p.naam }}</a></td><td class="num">{{ p.bezoekers }}</td><td class="num">{{ p.weergaven }}</td></tr>{% endfor %}
 </tbody></table></section>
 <section class="block"><div class="block-h"><h2>Waar ze vandaan komen (30 dagen)</h2></div>
 <table class="tbl"><thead><tr><th>Bron</th><th class="num">Bezoekers</th></tr></thead><tbody>

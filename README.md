@@ -1,6 +1,6 @@
 # windsurf-foto
 
-De fotodienst van het [Windsurf Wedstrijdarchief](https://www.ned-61.com/windsurf-archief/). De uitslagen staan als statische site op Hostinger (repo [windsurf-archief](https://github.com/NED-61/windsurf-archief)); de foto's staan op de NAS thuis en komen via deze dienst op de site. Het plan staat in `docs/fotoplan.md` van de archief-repo.
+De fotodienst van het [Windsurf Wedstrijdarchief](https://windsurfarchief.nl/). De uitslagen staan als statische site op Hostinger (repo [windsurf-archief](https://github.com/NED-61/windsurf-archief)); de foto's staan op de NAS thuis en komen via deze dienst op de site. Het plan staat in `docs/fotoplan.md` van de archief-repo.
 
 Wat de dienst doet (fase F0 t/m F2):
 
@@ -49,7 +49,7 @@ Tests: `venv/Scripts/python -m pytest -q`.
 |---|---|---|
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | het beheeraccount, aangemaakt bij de eerste start | (verplicht) |
 | `APP_URL` | het publieke adres van deze dienst, voor links in mails en in de api | `http://localhost:8000` |
-| `SITE_URL` | de archiefsite, waar `assets/wedstrijden.json` en `riders.json` staan | `https://www.ned-61.com/windsurf-archief` |
+| `SITE_URL` | de archiefsite, waar `assets/wedstrijden.json` en `riders.json` staan | `https://windsurfarchief.nl` (tot 0.5.4 `https://www.ned-61.com/windsurf-archief`, dat nu doorstuurt) |
 | `SITE_ORIGINS` | sites die de api mogen aanroepen (CORS), kommagescheiden | `https://www.ned-61.com,https://ned-61.com,https://windsurfarchief.nl,https://www.windsurfarchief.nl` |
 | `DATA_DIR` | database, verkleinde versies, cache (SSD) | `/data` |
 | `ORIG_DIR` | originelen (harde schijven) | `/orig` |
