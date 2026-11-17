@@ -1,14 +1,15 @@
 """Accounts (registreren, bevestigen, inloggen, wachtwoord), ridernaam claimen, en uploaden en bewerken van eigen foto's."""
 import datetime
+import json
 import re
 import secrets
 import shutil
 
 from fastapi import APIRouter, Request, HTTPException, Form, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from starlette.concurrency import run_in_threadpool
 
-from . import config, db, auth, images, archive, web, mail, naakt
+from . import config, db, auth, images, archive, web, mail, naakt, gelijkenis
 
 router = APIRouter()
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
@@ -282,20 +283,41 @@ def herkomst_check(herkomst, fotograaf, licentie, naam_uploader):
     return herkomst, None, "archief"
 
 
+def _upload_grenzen(u):
+    """Mag dit account nu uploaden? Ook nagelopen bij het antwoord op de lijkt-op-vraag: dat kan later komen."""
+    if u["upload_pauze"]:
+        raise HTTPException(403, "Je uploads staan even stil tot de beheerder je vorige foto heeft bekeken. Je hoort het per mail.")
+    if not auth.mag_direct(u) and _dagtelling(u["id"]) >= config.DAGLIMIET_NIEUW:
+        raise HTTPException(429, f"Je kunt als nieuw account {config.DAGLIMIET_NIEUW} foto's per dag uploaden. Morgen kan het weer; zodra je ridernaam is bevestigd vervalt die grens.")
+
+
+def _exact_dubbel(sha, wedstrijd):
+    """Staat precies dit bestand er al? Dan een 409 met die foto. Een eerder verwijderde regel met dezelfde sha gaat weg (de log houdt de geschiedenis)."""
+    dup = db.one("SELECT * FROM photos WHERE sha256=?", sha)
+    if dup and dup["status"] != "verwijderd":
+        return JSONResponse({"fout": "Deze foto staat er al" + (" (bij een andere wedstrijd)" if dup["event_slug"] != wedstrijd else "") + ".", "dubbel": web.foto_json(dup, met_status=True)}, status_code=409)
+    if dup:
+        db.db().execute("DELETE FROM photos WHERE id=?", (dup["id"],))
+        oud = config.ORIG_DIR / "verwijderd" / images.orig_path(dup).name
+        if oud.exists(): oud.unlink()
+    return None
+
+
+def _event_of_fout(wedstrijd):
+    ev = archive.event(wedstrijd)
+    if not ev:
+        raise HTTPException(503 if not archive.events() else 400, "De wedstrijdenlijst is nu niet beschikbaar, probeer het straks nog eens." if not archive.events() else "Onbekende wedstrijd.")
+    return ev
+
+
 @router.post("/api/upload")
 async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str = Form("archief"), fotograaf: str = Form(""), toestemming: str = Form(""),
                      herkomst: str = Form("eigen"), csrf: str = Form(""), bestand: UploadFile = File(...)):
     u = auth.require_verified(request); auth.check_csrf(request, csrf)
-    if u["upload_pauze"]:
-        raise HTTPException(403, "Je uploads staan even stil tot de beheerder je vorige foto heeft bekeken. Je hoort het per mail.")
+    _upload_grenzen(u)
     if toestemming != "ja": raise HTTPException(400, "Vink de verklaring over de foto's aan.")
     herkomst, credit, licentie = herkomst_check(herkomst, fotograaf, licentie, u["name"])
-    ev = archive.event(wedstrijd)
-    if not ev:
-        raise HTTPException(503 if not archive.events() else 400, "De wedstrijdenlijst is nu niet beschikbaar, probeer het straks nog eens." if not archive.events() else "Onbekende wedstrijd.")
-    direct = auth.mag_direct(u)
-    if not direct and _dagtelling(u["id"]) >= config.DAGLIMIET_NIEUW:
-        raise HTTPException(429, f"Je kunt als nieuw account {config.DAGLIMIET_NIEUW} foto's per dag uploaden. Morgen kan het weer; zodra je ridernaam is bevestigd vervalt die grens.")
+    ev = _event_of_fout(wedstrijd)
     tmp = config.DATA_DIR / "tmp" / secrets.token_hex(8)
     grootte, limiet = 0, config.MAX_UPLOAD_MB * 1024 * 1024
     with open(tmp, "wb") as f:
@@ -307,36 +329,88 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
                 f.close(); tmp.unlink(missing_ok=True)
                 raise HTTPException(413, f"Dit bestand is groter dan {config.MAX_UPLOAD_MB} MB.")
             f.write(blok)
+    orig_name = (bestand.filename or "")[-200:]
     try:
         soort = images.herken(tmp)
         if not soort:
             raise HTTPException(415, "Dit is geen foto die we kunnen lezen (JPEG, PNG, WebP of HEIC).")
         fmt, ext = soort
         sha = images.sha256_file(tmp)
-        dup = db.one("SELECT * FROM photos WHERE sha256=?", sha)
-        if dup and dup["status"] != "verwijderd":
-            return JSONResponse({"fout": "Deze foto staat er al" + (" (bij een andere wedstrijd)" if dup["event_slug"] != wedstrijd else "") + ".", "dubbel": web.foto_json(dup, met_status=True)}, status_code=409)
-        if dup:   # eerder verwijderd: de oude regel gaat weg, de log houdt de geschiedenis
-            db.db().execute("DELETE FROM photos WHERE id=?", (dup["id"],))
-            oud = config.ORIG_DIR / "verwijderd" / images.orig_path(dup).name
-            if oud.exists(): oud.unlink()
-        key = sha[:16]
-        rel = images.orig_rel(wedstrijd, ev.get("year"), images.opnamedatum_van(tmp), sha, ext)
-        orig = config.ORIG_DIR / rel
-        orig.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(tmp), str(orig))
+        dub = _exact_dubbel(sha, wedstrijd)
+        if dub: return dub
+        if gelijkenis.wacht_al(sha):
+            return JSONResponse({"fout": "Deze foto wacht hierboven al op je antwoord."}, status_code=409)
+        # lijkt hij op een foto die er al staat (opnieuw opgeslagen, verkleind, ...)? Dan eerst de uploader vragen (zie app/gelijkenis.py)
+        ph = await run_in_threadpool(gelijkenis.vingerafdruk, tmp)
+        taken = images.opnamedatum_van(tmp)
+        treffers = gelijkenis.zoek(ph, taken)
+        te_zien = [(d, r) for d, r in treffers if gelijkenis.kan_zien(u, r)]
+        meta = {"user_id": u["id"], "wedstrijd": wedstrijd, "licentie": licentie, "credit": credit, "herkomst": herkomst, "ext": ext, "sha": sha,
+                "grootte": grootte, "orig_name": orig_name, "phash": ph, "lijkt_op": gelijkenis.lijkt_op_json(treffers, gevraagd=bool(te_zien)) if treffers else None}
+        if te_zien:
+            token = await run_in_threadpool(gelijkenis.bewaar, tmp, meta)
+            return JSONResponse({"vraag": True, "token": token, "voorbeeld": f"/api/upload/lijkt/{token}.jpg",
+                                 "fout": "Deze foto lijkt op een foto die er al staat. Kies of het dezelfde foto is.",
+                                 "lijkt_op": [dict(web.foto_json(r, met_status=True), afstand=d, eigen=r["uploader_id"] == u["id"],
+                                                   wedstrijd_naam=(archive.event(r["event_slug"]) or {}).get("name") or r["event_slug"]) for d, r in te_zien[:3]]},
+                                status_code=409)
+        return await _sla_op(u, tmp, ev, meta)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+@router.get("/api/upload/lijkt/{token}.jpg")
+def api_upload_voorbeeld(request: Request, token: str):
+    """De kleine versie van een upload die op een antwoord wacht; alleen voor de uploader zelf."""
+    u = auth.require_verified(request)
+    p = gelijkenis.voorbeeld_pad(token, u["id"])
+    if not p: raise HTTPException(404, "Geen voorbeeld")
+    return FileResponse(p, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
+
+
+@router.post("/api/upload/antwoord")
+async def api_upload_antwoord(request: Request, token: str = Form(""), antwoord: str = Form(""), csrf: str = Form("")):
+    """Het antwoord op 'staat deze foto er al?': zelfde = niet uploaden; anders = toch uploaden, en de beheerder kijkt even mee."""
+    u = auth.require_verified(request); auth.check_csrf(request, csrf)
+    if antwoord not in ("zelfde", "anders"): raise HTTPException(400, "Kies of het dezelfde foto is of een andere.")
+    w = gelijkenis.haal(token, u["id"])
+    if not w: raise HTTPException(410, "Deze vraag is verlopen of al beantwoord. Upload de foto opnieuw als je hem toch wilt plaatsen.")
+    if antwoord == "zelfde":
+        gelijkenis.weg(token)
+        db.log("upload.lijkt_op_overgeslagen", u["id"], event_slug=w["wedstrijd"], detail=f"{w['orig_name'][-120:]}; {w['lijkt_op']}")
+        return {"ok": True, "overgeslagen": True}
+    _upload_grenzen(u)
+    ev = _event_of_fout(w["wedstrijd"])
+    dub = _exact_dubbel(w["sha"], w["wedstrijd"])
+    if dub:
+        gelijkenis.weg(token); return dub
+    tmp = gelijkenis.neem(token)
+    if not tmp: raise HTTPException(410, "Deze vraag is al beantwoord.")
+    try:
+        return await _sla_op(u, tmp, ev, w)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+async def _sla_op(u, tmp, ev, w):
+    """Een gekeurde upload opslaan: origineel op de NAS, verkleinde versies, naaktcheck, en de regel in de database."""
+    wedstrijd, sha, ext, herkomst = w["wedstrijd"], w["sha"], w["ext"], w["herkomst"]
+    key = sha[:16]
+    rel = images.orig_rel(wedstrijd, ev.get("year"), images.opnamedatum_van(tmp), sha, ext)
+    orig = config.ORIG_DIR / rel
+    orig.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(tmp), str(orig))
     try:
         info = images.maak_verkleind(orig, key)
     except Exception as e:  # noqa: BLE001
         orig.unlink(missing_ok=True); images.verwijder_verkleind(key)
         raise HTTPException(415, f"De foto kon niet verwerkt worden ({type(e).__name__}).")
+    direct = auth.mag_direct(u)
     niveau, detail = await run_in_threadpool(naakt.check, images.derived_dir(key) / "m.jpg")
     if niveau in naakt.WEIGEREN:
         # lijkt bloot: geweigerd en niet bewaard, ook niet in de wachtrij (keuze van Max, 3 november 2026); alleen een logregel zonder beeld
         orig.unlink(missing_ok=True); images.verwijder_verkleind(key)
-        db.log("naakt.geweigerd", u["id"], event_slug=wedstrijd, detail=f"{niveau}; {detail}; {(bestand.filename or '')[-120:]}; sha256 {sha[:16]}")
+        db.log("naakt.geweigerd", u["id"], event_slug=wedstrijd, detail=f"{niveau}; {detail}; {w['orig_name'][-120:]}; sha256 {sha[:16]}")
         if niveau == "rood":
             if not direct: db.db().execute("UPDATE users SET upload_pauze=1 WHERE id=?", (u["id"],))
             mail.mail_admins("Naaktcheck: upload geweigerd", f"De naaktcheck heeft een upload van {u['name']} ({u['email']}) geweigerd ({detail}). De foto is niet bewaard. "
@@ -344,18 +418,24 @@ async def api_upload(request: Request, wedstrijd: str = Form(...), licentie: str
                                 if not direct else "") + f"\n\n{config.APP_URL}/beheer?tab=accounts\n")
         raise HTTPException(422, naakt.WEIGER_TEKST)
     status = "zichtbaar" if direct and naakt.zichtbaar_mag(niveau) else "wacht"
+    if w.get("lijkt_op"): status = "wacht"     # lijkt op een foto die er al staat: de beheerder kijkt even of het echt een andere is
     cur = db.db().execute(
-        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,rights_basis,status,status_at,naakt,naakt_detail) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (key, wedstrijd, u["id"], sha, ext, rel, (bestand.filename or "")[-200:], grootte, info["width"], info["height"], info["taken_at"], db.now(), credit, licentie, herkomst, status, db.now(),
-         niveau, detail or None))
+        "INSERT INTO photos(key,event_slug,uploader_id,sha256,ext,orig_rel,orig_name,size,width,height,taken_at,uploaded_at,credit,licence,rights_basis,status,status_at,naakt,naakt_detail,phash,lijkt_op) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (key, wedstrijd, u["id"], sha, ext, rel, w["orig_name"], w["grootte"], info["width"], info["height"], info["taken_at"], db.now(), w["credit"], w["licentie"], herkomst, status, db.now(),
+         niveau, detail or None, w.get("phash"), w.get("lijkt_op")))
     fid = cur.lastrowid
-    db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {herkomst}; {bestand.filename}; {grootte} bytes")
+    db.log("upload", u["id"], photo_id=fid, event_slug=wedstrijd, detail=f"{status}; {herkomst}; {w['orig_name']}; {w['grootte']} bytes")
+    if w.get("lijkt_op"):
+        lo = json.loads(w["lijkt_op"])
+        db.log("upload.lijkt_op", u["id"], photo_id=fid, event_slug=wedstrijd,
+               detail=("uploader: een andere foto" if lo["gevraagd"] else "niet gevraagd (de gelijkende foto is niet zichtbaar voor de uploader)") + "; lijkt op "
+               + ", ".join(f"{t['id']} ({t['afstand']})" for t in lo["treffers"]))
     if not naakt.zichtbaar_mag(niveau):        # de check kon niet draaien: voor de zekerheid naar de wachtrij
         db.log(f"naakt.{niveau}", u["id"], photo_id=fid, event_slug=wedstrijd, detail=detail)
     if status == "wacht": _wachtrij_melding()
     row = db.one("SELECT * FROM photos WHERE id=?", fid)
     waarschuwing = _datum_waarschuwing(info["taken_at"], ev)
-    if direct and status == "wacht":      # vertrouwd, maar de naaktcheck kon niet draaien
+    if status == "wacht" and (direct or w.get("lijkt_op")):      # vertrouwd (of lijkt op een bestaande foto), maar toch eerst de beheerder
         waarschuwing = "; ".join(x for x in ("deze foto wordt eerst door de beheerder bekeken", waarschuwing) if x)
     return {"ok": True, "foto": web.foto_json(row, met_status=True), "waarschuwing": waarschuwing}
 

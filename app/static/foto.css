@@ -69,6 +69,35 @@ input.klein { font: inherit; font-size: .85rem; padding: .15rem .4rem; border: 1
 .uploads .st { color: var(--mut); }
 .uploads .st.fout { color: #b3261e; }
 .uploads .st.waarsch { color: #b7791f; }
+/* lijkt op een foto die er al staat: de vraag bij het uploaden, met een vaste balk onderin tot alles beantwoord is */
+.uploads li.vraag { border: 2px solid #b7791f; border-radius: 6px; padding: .7rem .8rem; background: rgba(183, 121, 31, .1); margin-block: .3rem; }
+.uploads li.vraag .balk i { background: #b7791f; }
+.uploads li.vraag .st { font-weight: 600; }
+.uploads li.overgeslagen { opacity: .65; }
+.lijkt { grid-column: 1 / -1; }
+.lijkt-kop { margin: .1rem 0 .6rem; font-size: 1.05rem; line-height: 1.4; }
+.lijkt-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .7rem; }
+@media (min-width: 40rem) { .lijkt-fotos { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
+.lijkt-fotos figure { margin: 0; }
+.lijkt-fotos img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--hover); border-radius: 4px; }
+.lijkt-fotos .jij img { outline: 3px solid var(--link); outline-offset: -3px; }
+.lijkt-fotos figcaption { font-size: .88rem; margin-top: .25rem; overflow-wrap: anywhere; }
+.lijkt-knoppen { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.lijkt-knoppen .btn { padding: .6rem 1rem; }
+.lijkt-balk { position: fixed; z-index: 30; left: 50%; bottom: 1rem; transform: translateX(-50%); width: max-content; max-width: calc(100% - 2rem);
+              border: 0; border-radius: 999px; padding: .65rem 1.2rem; background: #8a5a12; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+              box-shadow: 0 2px 12px rgba(0, 0, 0, .3); }
+.lijkt-balk:hover { filter: brightness(1.15); }
+.lijkt-balk[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) { .lijkt-balk { animation: lijkt-tik .5s ease-out 3 alternate; } }
+@keyframes lijkt-tik { to { transform: translateX(-50%) scale(1.06); } }
+body.met-lijkt-balk { padding-bottom: 5rem; }   /* de balk mag niets onderaan de pagina afdekken */
+/* beheer: een upload naast de foto waar hij op lijkt */
+.lijkt-rij { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .6rem; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+.lijkt-rij figure { margin: 0; }
+.lijkt-rij figure.nieuw .ft { outline: 3px solid #b7791f; outline-offset: -3px; }
+.lijkt-rij .acties { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .4rem; }
+.lijkt-rij .acties form { display: flex; gap: .2rem; }
 
 /* beheer */
 .tabs { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; border-bottom: 1px solid var(--line); padding-bottom: .5rem; }

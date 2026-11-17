@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config, db, auth, images, archive, web, naakt
+from . import config, db, auth, images, archive, web, naakt, gelijkenis
 from .routes_public import router as public_router
 from .routes_account import router as account_router
 from .routes_admin import router as admin_router
@@ -31,7 +31,7 @@ def opstart():
 
 def _archief_en_migratie():
     """Archieflijst laden, originelen uit de oude indeling (op hash) verplaatsen naar <jaar>/<wedstrijd>/, en foto's van voor de
-    naaktcheck (0.4.0) alsnog beoordelen. Na elkaar in één taak: de database-verbinding is gedeeld."""
+    naaktcheck (0.4.0) alsnog beoordelen, en vingerafdrukken voor de lijkt-op-controle. Na elkaar in één taak: de database-verbinding is gedeeld."""
     archive.events()
     try:
         images.migreer_originelen(lambda slug: (archive.event(slug) or {}).get("year"))
@@ -41,6 +41,11 @@ def _archief_en_migratie():
         naakt.controleer_bestaande()
     except Exception as e:  # noqa: BLE001
         db.log("naakt.bestaande_fout", detail=str(e)[:300])
+    try:   # lijkt-op-controle (0.6.1): vingerafdruk voor de foto's die er al stonden, en vergeten vragen opruimen
+        gelijkenis.opruimen()
+        gelijkenis.vul_bestaande()
+    except Exception as e:  # noqa: BLE001
+        db.log("lijkt_op.bestaande_fout", detail=str(e)[:300])
 
 
 @asynccontextmanager

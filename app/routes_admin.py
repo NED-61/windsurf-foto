@@ -1,4 +1,5 @@
 """Beheer: wachtrij, meldingen, claims en claimcodes, accounts, log, mail-outbox en de archiefkoppeling. Alles onder /beheer, alleen voor admin."""
+import json
 import secrets
 
 from fastapi import APIRouter, Request, HTTPException, Form
@@ -9,6 +10,7 @@ from .routes_account import verwijder_foto
 router = APIRouter()
 TABS = ("wachtrij", "meldingen", "claims", "accounts", "bezoek", "log", "mail", "archief")
 GEVLAGD = "p.naakt IN ('oranje','rood','fout')"   # tegengehouden door de naaktcheck: alleen per foto goed te keuren, nooit met "alles goedkeuren"
+LIJKT = "p.lijkt_op IS NOT NULL"                  # leek bij het uploaden op een foto die er al stond: ook per foto, naast de gelijkende
 
 
 @router.get("/beheer")
@@ -17,7 +19,7 @@ def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, 
     if tab not in TABS: tab = "wachtrij"
     ctx = {"tab": tab}
     if tab == "wachtrij":
-        rows = db.all_(f"SELECT p.*, u.name uname, u.email uemail, u.trusted utrusted FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' AND NOT COALESCE({GEVLAGD}, 0) ORDER BY p.uploader_id, p.event_slug, p.id")
+        rows = db.all_(f"SELECT p.*, u.name uname, u.email uemail, u.trusted utrusted FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' AND NOT COALESCE({GEVLAGD}, 0) AND NOT {LIJKT} ORDER BY p.uploader_id, p.event_slug, p.id")
         groepen = {}
         for r in rows: groepen.setdefault((r["uploader_id"], r["uname"], r["uemail"], r["event_slug"]), []).append(web.foto_json(r, met_status=True))
         ctx["groepen"] = groepen
@@ -25,6 +27,7 @@ def beheer(request: Request, tab: str = "wachtrij", account: int | None = None, 
                         for r in db.all_(f"SELECT p.*, u.name uname, u.email uemail FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' AND {GEVLAGD} "
                                          "ORDER BY CASE p.naakt WHEN 'rood' THEN 0 WHEN 'fout' THEN 1 ELSE 2 END, p.id")]
         ctx["naaktcheck"] = naakt.status()
+        ctx["lijkt"] = _lijkt_op_wachtrij()
         ctx["verborgen"] = db.all_("SELECT p.*, u.name uname FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='verborgen' ORDER BY p.status_at DESC LIMIT 100")
         ctx["tags_wacht"] = [dict(t, naam=t["name"] or archive.rider_naam(t["person_id"]), jeugd=bool(t["person_id"] and archive.rider_youth(t["person_id"])))
                              for t in db.all_("SELECT t.*, p.key, p.event_slug, u.name tagger FROM tags t JOIN photos p ON p.id=t.photo_id JOIN users u ON u.id=t.tagged_by WHERE t.status='wacht' ORDER BY t.id")]
@@ -72,6 +75,22 @@ def _mail_uploader(uid, onderwerp, tekst):
     if u: mail.send(u["email"], onderwerp, tekst)
 
 
+def _lijkt_op_wachtrij():
+    """Foto's in de wachtrij die bij het uploaden op een bestaande foto leken, elk met de foto's waar hij op leek (zie app/gelijkenis.py)."""
+    uit = []
+    for r in db.all_(f"SELECT p.*, u.name uname FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.status='wacht' AND {LIJKT} AND NOT COALESCE({GEVLAGD}, 0) ORDER BY p.id"):
+        try:
+            lo = json.loads(r["lijkt_op"])
+        except ValueError:
+            lo = {}
+        treffers = []
+        for t in lo.get("treffers", [])[:3]:
+            m = db.one("SELECT p.*, u.name uname FROM photos p JOIN users u ON u.id=p.uploader_id WHERE p.id=?", t["id"])
+            if m: treffers.append(dict(web.foto_json(m, met_status=True), afstand=t["afstand"], uname=m["uname"]))
+        uit.append(dict(web.foto_json(r, met_status=True), uname=r["uname"], gevraagd=bool(lo.get("gevraagd")), treffers=treffers))
+    return uit
+
+
 @router.post("/beheer/foto/{foto_id}/{actie}")
 def beheer_foto(request: Request, foto_id: int, actie: str, reden: str = Form(""), csrf: str = Form(""), terug: str = Form("/beheer")):
     a = auth.require_admin(request); auth.check_csrf(request, csrf)
@@ -99,7 +118,7 @@ def beheer_foto(request: Request, foto_id: int, actie: str, reden: str = Form(""
 @router.post("/beheer/account/{uid}/goedkeuren-alles")
 def goedkeuren_alles(request: Request, uid: int, wedstrijd: str = Form(""), csrf: str = Form("")):
     a = auth.require_admin(request); auth.check_csrf(request, csrf)
-    sql, args = f"SELECT p.id, p.event_slug FROM photos p WHERE p.uploader_id=? AND p.status='wacht' AND NOT COALESCE({GEVLAGD}, 0)", [uid]
+    sql, args = f"SELECT p.id, p.event_slug FROM photos p WHERE p.uploader_id=? AND p.status='wacht' AND NOT COALESCE({GEVLAGD}, 0) AND NOT {LIJKT}", [uid]
     if wedstrijd: sql += " AND p.event_slug=?"; args.append(wedstrijd)
     rows = db.all_(sql, *args)
     for r in rows:
@@ -110,7 +129,9 @@ def goedkeuren_alles(request: Request, uid: int, wedstrijd: str = Form(""), csrf
         onderwerp, tekst = mail.foto_beslist(naam["name"] if naam else "", len(rows), True, "")
         _mail_uploader(uid, onderwerp, tekst)
     apart = db.one(f"SELECT COUNT(*) n FROM photos p WHERE p.uploader_id=? AND p.status='wacht' AND {GEVLAGD}", uid)["n"]
-    return web.redirect("/beheer?tab=wachtrij", f"{len(rows)} foto's goedgekeurd." + (f" {apart} van de naaktcheck staan er nog: die keur je per foto." if apart else ""))
+    lijkt = db.one(f"SELECT COUNT(*) n FROM photos p WHERE p.uploader_id=? AND p.status='wacht' AND {LIJKT} AND NOT COALESCE({GEVLAGD}, 0)", uid)["n"]
+    return web.redirect("/beheer?tab=wachtrij", f"{len(rows)} foto's goedgekeurd." + (f" {apart} van de naaktcheck staan er nog: die keur je per foto." if apart else "")
+                        + (f" {lijkt} die op een bestaande foto lijken staan er nog: die keur je per foto." if lijkt else ""))
 
 
 def _pauze_klaar(uid, door):

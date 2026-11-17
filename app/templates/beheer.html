@@ -26,7 +26,32 @@
   </div>
 </section>
 {% endif %}
-{% if not groepen and not naakt %}<p class="muted">De wachtrij is leeg.</p>{% endif %}
+{% if lijkt %}
+<section class="block">
+  <div class="block-h"><h2>Lijkt op een foto die er al staat <span class="pill">{{ lijkt|length }}</span></h2></div>
+  <p class="small muted">Deze uploads lijken op een foto die al op de site staat (opnieuw opgeslagen, verkleind, lichter, zwart-wit, of een foto uit dezelfde serie). De uploader zei dat het een andere foto is, of kon de gelijkende foto niet zien omdat die nog in de wachtrij stond of verborgen was. Links de nieuwe foto, rechts waar hij op lijkt. Een andere foto keur je goed; dezelfde foto verberg je. Deze foto's gaan nooit mee met "alles goedkeuren".</p>
+  {% for f in lijkt %}
+  <div class="lijkt-rij">
+    <figure class="nieuw">
+      <a class="ft" href="/foto/{{ f.id }}"><img loading="lazy" src="/i/{{ f.key }}/t.jpg" width="{{ f.tw }}" height="{{ f.th }}" alt=""><span class="badge badge-wacht">nieuw</span></a>
+      <figcaption class="small">{{ f.uname }} · {{ event_naam(f.wedstrijd) }}<br><span class="muted">{{ 'uploader zegt: een andere foto' if f.gevraagd else 'uploader niet gevraagd (kon de gelijkende foto niet zien)' }}</span></figcaption>
+    </figure>
+    {% for t in f.treffers %}
+    <figure>
+      {% if t.status != 'verwijderd' %}<a class="ft" href="/foto/{{ t.id }}"><img loading="lazy" src="/i/{{ t.key }}/t.jpg" width="{{ t.tw }}" height="{{ t.th }}" alt="">{% if t.status != 'zichtbaar' %}<span class="badge badge-{{ t.status }}">{{ 'wachtrij' if t.status == 'wacht' else t.status }}</span>{% endif %}</a>
+      {% else %}<div class="ft"><span class="badge badge-verwijderd">intussen verwijderd</span></div>{% endif %}
+      <figcaption class="small">{% if t.afstand <= 4 %}bijna gelijk{% elif t.afstand <= 8 %}lijkt sterk{% else %}lijkt erop{% endif %} <span class="muted">(verschil {{ t.afstand }} van 64)</span><br>{{ t.uname }} · {{ event_naam(t.wedstrijd) }}</figcaption>
+    </figure>
+    {% else %}<p class="small muted">De foto waar hij op leek bestaat niet meer.</p>{% endfor %}
+    <div class="acties">
+      <form method="post" action="/beheer/foto/{{ f.id }}/goedkeuren"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><button class="btn btn-klein" type="submit">Andere foto: OK</button></form>
+      <form method="post" action="/beheer/foto/{{ f.id }}/verbergen"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="terug" value="/beheer?tab=wachtrij"><input name="reden" placeholder="reden" class="klein" value="deze foto staat er al"><button class="btn btn-klein btn-stil" type="submit">Dezelfde foto: verberg</button></form>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% if not groepen and not naakt and not lijkt %}<p class="muted">De wachtrij is leeg.</p>{% endif %}
 {% for (uid, uname, uemail, slug), fotos in groepen.items() %}
 <section class="block">
   <div class="block-h"><h2>{{ uname }} <small class="muted">{{ uemail }}</small>: <a href="/wedstrijd/{{ slug }}">{{ event_naam(slug) }}</a></h2>

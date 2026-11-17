@@ -6,7 +6,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSIE = "0.6.0"  # beveiliging (17 november 2026): nieuwe pakketten, groottegrens, CSP en HSTS, limieten per adres en account, sessie vervalt bij nieuw wachtwoord; daarvoor: F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck (bloot = geweigerd), bezoekersteller, riderfoto's ook van wedstrijden met de rider, eigen domein windsurfarchief.nl (sinds 0.5.4 ook het standaardadres)
+VERSIE = "0.6.1"  # lijkt-op-controle bij het uploaden (0.6.1, 17 november 2026); beveiliging (0.6.0, 17 november 2026): nieuwe pakketten, groottegrens, CSP en HSTS, limieten per adres en account, sessie vervalt bij nieuw wachtwoord; daarvoor: F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck (bloot = geweigerd), bezoekersteller, riderfoto's ook van wedstrijden met de rider, eigen domein windsurfarchief.nl (sinds 0.5.4 ook het standaardadres)
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))                       # SSD: database, verkleinde versies, cache
 ORIG_DIR = Path(os.environ.get("ORIG_DIR", str(DATA_DIR / "orig")))        # harde schijven: de originelen
@@ -26,6 +26,7 @@ MAIL_FROM = os.environ.get("MAIL_FROM", SMTP_USER)
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "40"))
 DAGLIMIET_NIEUW = int(os.environ.get("DAGLIMIET_NIEUW", "50"))   # uploads per dag voor een account dat nog niet vertrouwd is
 NAAKTCHECK = os.environ.get("NAAKTCHECK", "1") != "0"            # 0 = naaktcheck uit (noodknop), zie app/naakt.py
+LIJKT_OP_DREMPEL = int(os.environ.get("LIJKT_OP_DREMPEL", "12"))  # lijkt-op-controle: tot dit verschil (van 64) vragen we of het dezelfde foto is; -1 = uit (zie app/gelijkenis.py)
 THUMB_PX = 400     # lange zijde thumbnail
 MEDIUM_PX = 1600   # lange zijde kijkversie
 JPEG_KWALITEIT = 82

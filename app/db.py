@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS photos (
   status_reason TEXT, status_by INTEGER, status_at TEXT,
   result_id TEXT,
   naakt TEXT,                                -- naaktcheck: groen | oranje | rood | fout | uit (zie app/naakt.py); NULL = nog niet gecontroleerd
-  naakt_detail TEXT                          -- de treffers die meetelden, met score
+  naakt_detail TEXT,                         -- de treffers die meetelden, met score
+  phash TEXT,                                -- vingerafdruk van het beeld (zie app/gelijkenis.py); '' = effen vlak, NULL = nog niet bekeken
+  lijkt_op TEXT                              -- JSON: leek bij het uploaden op deze foto's {gevraagd, treffers: [{id, afstand}]}; NULL = nergens op
 );
 CREATE INDEX IF NOT EXISTS photos_event ON photos(event_slug, status);
 CREATE INDEX IF NOT EXISTS photos_uploader ON photos(uploader_id, uploaded_at);
@@ -138,6 +140,8 @@ def _migreer(con):
     if "rights_basis" not in kol: con.execute("ALTER TABLE photos ADD COLUMN rights_basis TEXT NOT NULL DEFAULT 'eigen'")
     if "naakt" not in kol: con.execute("ALTER TABLE photos ADD COLUMN naakt TEXT")
     if "naakt_detail" not in kol: con.execute("ALTER TABLE photos ADD COLUMN naakt_detail TEXT")
+    if "phash" not in kol: con.execute("ALTER TABLE photos ADD COLUMN phash TEXT")
+    if "lijkt_op" not in kol: con.execute("ALTER TABLE photos ADD COLUMN lijkt_op TEXT")
 
 
 def reset():

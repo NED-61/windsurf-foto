@@ -114,6 +114,8 @@
         st.textContent = j.foto.status === "zichtbaar" ? "staat online" : "in de wachtrij";
         if (j.waarschuwing) { st.textContent += " · " + j.waarschuwing; st.className = "st waarsch"; }
         toonKlaar(j.foto);
+      } else if (x.status === 409 && j.vraag) {
+        vraag(item, j);
       } else if (x.status === 409) {
         st.textContent = j.fout || "staat er al"; st.className = "st waarsch";
       } else {
@@ -125,11 +127,91 @@
     x.onerror = function () { bezig--; st.innerHTML = 'geen verbinding <button type="button" class="link">opnieuw</button>'; st.className = "st fout"; st.querySelector("button").addEventListener("click", function () { wachtrij.push(item); volgende(); }); volgende(); };
     x.send(fd);
   }
+  /* ---------- lijkt op een foto die er al staat: eerst de vraag, pas na het antwoord wordt hij opgeslagen ---------- */
+  var balkKnop = document.createElement("button");
+  balkKnop.type = "button"; balkKnop.className = "lijkt-balk"; balkKnop.hidden = true;
+  document.body.appendChild(balkKnop);
+  balkKnop.addEventListener("click", function () {
+    var v = openVragen()[0]; if (!v) return;
+    v.scrollIntoView({ behavior: "smooth", block: "center" });
+    var k = v.querySelector(".lijkt-knoppen .btn"); if (k) k.focus({ preventScroll: true });
+  });
+  function openVragen() { return lijst.querySelectorAll("li.vraag"); }
+  function telVragen() {
+    var n = openVragen().length;
+    balkKnop.hidden = !n;
+    document.body.classList.toggle("met-lijkt-balk", n > 0);
+    balkKnop.textContent = n === 1 ? "1 foto wacht op je antwoord: staat hij er al? Bekijk ↓" : n + " foto's wachten op je antwoord: staan ze er al? Bekijk ↓";
+  }
+  function statusTekst(f) { return f.status === "zichtbaar" ? "" : f.status === "wacht" ? "nog in de wachtrij" : f.status; }
+  function vraag(item, j) {
+    var li = item.li, st = li.querySelector(".st"), n = j.lijkt_op.length;
+    var alleEigen = j.lijkt_op.every(function (f) { return f.eigen; });
+    li.querySelector(".balk i").style.width = "100%";
+    li.classList.add("vraag");
+    st.textContent = "wacht op je antwoord"; st.className = "st waarsch";
+    var p = document.createElement("div");
+    p.className = "lijkt"; p.setAttribute("role", "group"); p.setAttribute("aria-label", "Staat deze foto er al?");
+    p.innerHTML = '<p class="lijkt-kop"><strong>Staat deze foto er al?</strong> Hij lijkt op ' + (n === 1 ? "een foto" : n + " foto's") +
+      (alleEigen ? " die je zelf al hebt geüpload" : " die al op de site " + (n === 1 ? "staat" : "staan")) + ". Vergelijk ze en kies: pas daarna wordt hij geüpload.</p>" +
+      '<div class="lijkt-fotos"><figure class="jij"><img src="' + esc(j.voorbeeld) + '" alt="Jouw foto"><figcaption><strong>Jouw foto</strong><br><small class="muted">' + esc(item.file.name) + "</small></figcaption></figure>" +
+      j.lijkt_op.map(function (f) {
+        var s = statusTekst(f);
+        return '<figure><a href="/foto/' + Number(f.id) + '" target="_blank" rel="noopener"><img src="/i/' + esc(f.key) + '/t.jpg" alt="De foto die er al staat"></a>' +
+          "<figcaption><strong>Staat er al" + (f.eigen ? " (van jou)" : "") + '</strong><br><small class="muted">' + esc(f.wedstrijd_naam) + (s ? " · " + esc(s) : "") + "</small></figcaption></figure>";
+      }).join("") + "</div>" +
+      '<div class="lijkt-knoppen"><button type="button" class="btn" data-antwoord="zelfde">Ja, dezelfde foto: niet uploaden</button>' +
+      '<button type="button" class="btn btn-stil" data-antwoord="anders">Nee, een andere foto: toch uploaden</button></div>' +
+      '<p class="small muted">Kies je "een andere foto", dan kijkt de beheerder nog even mee voordat hij op de site staat.</p>';
+    li.appendChild(p);
+    var eigen = p.querySelector(".jij img"), geprobeerd = false;
+    eigen.addEventListener("error", function () {   // geen voorbeeld van de server: dan het bestand zelf (lukt niet met HEIC in de meeste browsers)
+      if (!geprobeerd && window.URL) { geprobeerd = true; eigen.src = URL.createObjectURL(item.file); } else { eigen.alt = "(geen voorbeeld)"; }
+    });
+    p.querySelector(".lijkt-knoppen").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-antwoord]"); if (b && !b.disabled) antwoord(item, j, b.dataset.antwoord, p);
+    });
+    telVragen();
+  }
+  function antwoord(item, j, a, p) {
+    var li = item.li, st = li.querySelector(".st"), knoppen = p.querySelectorAll(".lijkt-knoppen button");
+    function knoppenAan(aan) { Array.prototype.forEach.call(knoppen, function (k) { k.disabled = !aan; }); }
+    function klaarMet() { li.classList.remove("vraag"); p.remove(); }
+    knoppenAan(false);
+    st.textContent = a === "zelfde" ? "bezig" : "bezig met uploaden"; st.className = "st";
+    var fd = new FormData();
+    fd.append("csrf", csrf); fd.append("token", j.token); fd.append("antwoord", a);
+    fetch("/api/upload/antwoord", { method: "POST", body: fd, credentials: "same-origin" }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) { return { s: r.status, b: b }; });
+    }).then(function (res) {
+      var b = res.b;
+      if (res.s === 200 && b.overgeslagen) {
+        klaarMet(); li.classList.add("overgeslagen");
+        st.textContent = "niet geüpload: deze foto staat er al"; st.className = "st";
+      } else if (res.s === 200 && b.ok) {
+        klaarMet();
+        st.textContent = b.foto.status === "zichtbaar" ? "staat online" : "in de wachtrij";
+        if (b.waarschuwing) { st.textContent += " · " + b.waarschuwing; st.className = "st waarsch"; } else { st.className = "st"; }
+        toonKlaar(b.foto);
+      } else if ([409, 410, 413, 415, 422].indexOf(res.s) >= 0) {   // definitief: staat er intussen al, verlopen, of geweigerd
+        klaarMet();
+        st.textContent = b.fout || ("niet geüpload (" + res.s + ")"); st.className = res.s === 409 ? "st waarsch" : "st fout";
+      } else {                                                       // even niet gelukt: de vraag blijft staan
+        knoppenAan(true);
+        st.textContent = (b.fout || ("mislukt (" + res.s + ")")) + " Kies nog eens."; st.className = "st fout";
+      }
+      telVragen();
+    }).catch(function () {
+      knoppenAan(true);
+      st.textContent = "geen verbinding: kies nog eens"; st.className = "st fout";
+    });
+  }
+
   input.addEventListener("change", function () { voegToe(input.files); input.value = ""; });
   drop.addEventListener("click", function (e) { if (e.target.tagName !== "LABEL") input.click(); });
   drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
   ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
   ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); }); });
   drop.addEventListener("drop", function (e) { if (e.dataTransfer && e.dataTransfer.files.length) voegToe(e.dataTransfer.files); });
-  window.addEventListener("beforeunload", function (e) { if (bezig || wachtrij.length) { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", function (e) { if (bezig || wachtrij.length || openVragen().length) { e.preventDefault(); e.returnValue = ""; } });
 })();
