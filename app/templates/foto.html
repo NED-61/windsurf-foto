@@ -35,7 +35,7 @@
     <div id="rider-hits" class="hits"></div>
     <p id="rider-gekozen" class="small" hidden>Gekozen: <strong></strong> <button type="button" class="link" id="rider-anders">anders</button></p>
     <p><button class="btn btn-stil" type="submit">Toevoegen</button> <span class="form-uit small muted"></span></p>
-    <p class="small muted">Deelnemers van deze wedstrijd staan bovenaan de lijst. Staat iemand er niet bij, typ dan de naam; de beheerder koppelt die later aan het archief.</p>
+    <p class="small muted">Klik op een naam in de lijst en hij staat er meteen bij. Deelnemers van deze wedstrijd staan bovenaan. Staat iemand er niet bij, typ dan de naam en klik Toevoegen; de beheerder koppelt die later aan het archief.</p>
   </form>
   {% elif not user %}<p class="small muted"><a href="/inloggen?terug=/foto/{{ f.id }}">Log in</a> om aan te geven wie erop staat.</p>{% endif %}
 </section>
@@ -104,6 +104,9 @@
   hits.addEventListener("click", function (e) {
     var b = e.target.closest(".hit"); if (!b) return;
     pid.value = b.dataset.id; q.value = b.dataset.name; gek.querySelector("strong").textContent = b.dataset.name; gek.hidden = false; hits.innerHTML = "";
+    /* een naam uit de lijst kiezen is genoeg: meteen opslaan, zonder nog op Toevoegen te klikken (wens van Max, 17 november 2026) */
+    var f = document.getElementById("tagform");
+    if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   document.getElementById("rider-anders").addEventListener("click", function () { pid.value = ""; q.value = ""; gek.hidden = true; q.focus(); zoek(); });
   document.addEventListener("click", function (e) { if (!e.target.closest("#tagform")) hits.innerHTML = ""; });

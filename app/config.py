@@ -6,7 +6,7 @@ import os
 import secrets
 from pathlib import Path
 
-VERSIE = "0.6.1"  # lijkt-op-controle bij het uploaden (0.6.1, 17 november 2026); beveiliging (0.6.0, 17 november 2026): nieuwe pakketten, groottegrens, CSP en HSTS, limieten per adres en account, sessie vervalt bij nieuw wachtwoord; daarvoor: F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck (bloot = geweigerd), bezoekersteller, riderfoto's ook van wedstrijden met de rider, eigen domein windsurfarchief.nl (sinds 0.5.4 ook het standaardadres)
+VERSIE = "0.6.2"  # naam uit de lijst kiezen slaat de tag meteen op (0.6.2, 17 november 2026); lijkt-op-controle bij het uploaden (0.6.1, 17 november 2026); beveiliging (0.6.0, 17 november 2026): nieuwe pakketten, groottegrens, CSP en HSTS, limieten per adres en account, sessie vervalt bij nieuw wachtwoord; daarvoor: F0 t/m F3, de export naar media.json uit F4, originelen in <jaar>/<wedstrijd>/, herkomst (fotograaf onbekend), geen lightbox, naaktcheck (bloot = geweigerd), bezoekersteller, riderfoto's ook van wedstrijden met de rider, eigen domein windsurfarchief.nl (sinds 0.5.4 ook het standaardadres)
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))                       # SSD: database, verkleinde versies, cache
 ORIG_DIR = Path(os.environ.get("ORIG_DIR", str(DATA_DIR / "orig")))        # harde schijven: de originelen
