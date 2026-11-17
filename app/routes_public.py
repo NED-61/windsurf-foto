@@ -39,22 +39,16 @@ def api_wedstrijd(slug: str):
 
 @router.get("/api/rider/{pid}")
 def api_rider(pid: str):
-    """Voor de riderpagina van de site: "fotos" = foto's waarop deze rider getagd is; "wedstrijd_fotos" = foto's van wedstrijden waarin
-    deze rider meevoer (volgens de uitslagen in wedstrijden.json), zonder de getagde, willekeurig, hooguit 60 ("n_wedstrijd" = het totaal).
-    Alles leeg als de rider heeft ingesteld dat er geen foto's op zijn profiel staan."""
+    """Voor de riderpagina van de site: "fotos" = alleen de foto's waarop deze rider getagd is (zichtbare tag).
+    Sinds 0.6.4 geen foto's meer van wedstrijden waarin de rider meevoer maar niet getagd is (Max, 17 november 2026: daar stonden dan
+    de foto's van alle andere riders van die wedstrijd). "n_wedstrijd" en "wedstrijd_fotos" blijven leeg in het antwoord, zodat een
+    oudere site.js die ze nog leest gewoon werkt. Alles leeg als de rider heeft ingesteld dat er geen foto's op zijn profiel staan."""
     leeg = {"rider": pid, "n": 0, "fotos": [], "n_wedstrijd": 0, "wedstrijd_fotos": []}
     if db.one("SELECT 1 FROM users WHERE person_id=? AND hide_profile=1", pid):
         return JSONResponse(leeg, headers={"Cache-Control": "public, max-age=60"})
     rows = db.all_(f"SELECT p.* FROM photos p JOIN tags t ON t.photo_id=p.id WHERE t.person_id=? AND t.status='zichtbaar' AND p.status='zichtbaar' AND {web.VERBORGEN_PROFIEL} "
                    "GROUP BY p.id ORDER BY COALESCE(p.taken_at, p.uploaded_at) DESC", pid)
-    getagd = {r["id"] for r in rows}
-    slugs = [s for s, e in archive.events().items() if pid in (e.get("riders") or [])]
-    wed = []
-    if slugs:
-        wed = [r for r in db.all_(f"SELECT * FROM photos WHERE status='zichtbaar' AND event_slug IN ({','.join('?' * len(slugs))}) ORDER BY RANDOM()", *slugs)
-               if r["id"] not in getagd]
-    return JSONResponse({**leeg, "n": len(rows), "fotos": [web.foto_json(r) for r in rows], "n_wedstrijd": len(wed), "wedstrijd_fotos": [web.foto_json(r) for r in wed[:60]]},
-                        headers={"Cache-Control": "public, max-age=60"})
+    return JSONResponse({**leeg, "n": len(rows), "fotos": [web.foto_json(r) for r in rows]}, headers={"Cache-Control": "public, max-age=60"})
 
 
 RECHTEN = {"archief": "alleen op dit archief, met toestemming van de uploader", "cc-by": "CC BY 4.0", "cc-by-nc": "CC BY-NC 4.0"}

@@ -502,17 +502,23 @@ def test_teller_samenvatten_en_limiet(omgeving, monkeypatch):
     assert c.get("/static/tel.js").status_code == 200
 
 
-def test_api_rider_ook_fotos_van_wedstrijden(omgeving, monkeypatch):
+def test_api_rider_alleen_getagde_fotos(omgeving, monkeypatch):
+    """Sinds 0.6.4: alleen foto's waarop de rider getagd is, geen foto's van wedstrijden waarin hij alleen meevoer."""
     c, db = omgeving["c"], omgeving["db"]
     a = admin_client(omgeving)
     f = upload(a, "nk-slalom-2024", jpeg((120, 60, 30))).json()["foto"]           # jan-jansen en kim-de-jong voeren mee
+    g = upload(a, "nk-slalom-2024", jpeg((30, 60, 120))).json()["foto"]
     j = c.get("/api/rider/jan-jansen").json()
-    assert j["n"] == 0 and j["n_wedstrijd"] == 1 and j["wedstrijd_fotos"][0]["id"] == f["id"]
-    assert c.get("/api/rider/piet-de-vries").json()["n_wedstrijd"] == 0              # niet meegevaren
-    # getagd: dan staat hij bij "fotos" en niet nog eens bij "wedstrijd_fotos"
+    assert j["n"] == 0 and j["fotos"] == [] and j["n_wedstrijd"] == 0 and j["wedstrijd_fotos"] == []   # meegevaren, niet getagd: niets
+    # getagd op f: alleen f, niet de andere foto van dezelfde wedstrijd
     db.db().execute("INSERT INTO tags(photo_id,person_id,tagged_by,created_at,status) VALUES(?,?,1,'2026-01-01','zichtbaar')", (f["id"], "jan-jansen"))
     j = c.get("/api/rider/jan-jansen").json()
-    assert j["n"] == 1 and j["n_wedstrijd"] == 0
+    assert j["n"] == 1 and [x["id"] for x in j["fotos"]] == [f["id"]] and j["wedstrijd_fotos"] == []
+    assert g["id"] not in [x["id"] for x in j["fotos"]]
+    assert c.get("/api/rider/kim-de-jong").json()["n"] == 0                       # voer ook mee, staat op geen van beide getagd
+    # een tag die nog wacht op goedkeuring telt nog niet
+    db.db().execute("INSERT INTO tags(photo_id,person_id,tagged_by,created_at,status) VALUES(?,?,1,'2026-01-01','wacht')", (g["id"], "kim-de-jong"))
+    assert c.get("/api/rider/kim-de-jong").json()["n"] == 0
     # rider wil geen foto's op zijn profiel: niets
     lid = registreer_en_bevestig(c, db, "jan@example.org", "Jan Jansen")
     db.db().execute("UPDATE users SET person_id='jan-jansen', hide_profile=1 WHERE id=?", (lid["id"],))
