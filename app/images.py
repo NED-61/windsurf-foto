@@ -93,13 +93,25 @@ def opnamedatum_van(path: Path):
         return None
 
 
-def maak_verkleind(src: Path, key: str) -> dict:
-    """Maakt t.jpg (400) en m.jpg (1600) in derived_dir(key). Geeft breedte, hoogte (na draaien volgens EXIF) en opnamedatum."""
+# met de hand draaien, in graden rechtsom (Pillow's ROTATE_* draait linksom)
+DRAAI = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180, 270: Image.Transpose.ROTATE_90}
+
+
+def key_voor(sha: str, draai: int = 0) -> str:
+    """Adres van de verkleinde versies. Ongedraaid de eerste 16 tekens van de sha256; gedraaid een eigen key per stand, want /i/<key>/...
+    staat een maand 'immutable' in de cache van browsers: hetzelfde adres met een ander beeld zou nog lang de oude stand laten zien."""
+    return sha[:16] if not draai else hashlib.sha256(f"{sha}:{draai}".encode()).hexdigest()[:16]
+
+
+def maak_verkleind(src: Path, key: str, draai: int = 0) -> dict:
+    """Maakt t.jpg (400) en m.jpg (1600) in derived_dir(key). Geeft breedte, hoogte (na draaien volgens EXIF en daarna draai graden
+    rechtsom) en opnamedatum."""
     d = derived_dir(key)
     d.mkdir(parents=True, exist_ok=True)
     with open_upload(src) as im:
         taken = opnamedatum(im)
         im = ImageOps.exif_transpose(im)
+        if draai: im = im.transpose(DRAAI[draai])
         w, h = im.size
         if im.mode not in ("RGB", "L"): im = im.convert("RGB")
         for naam, px in (("m", config.MEDIUM_PX), ("t", config.THUMB_PX)):

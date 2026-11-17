@@ -14,6 +14,12 @@
       {% if orig and (f.orig_public or eigenaar or (user and user.role == 'admin')) %}<p class="small"><a href="/o/{{ f.id }}">Origineel downloaden</a> ({{ f.size|mb }}, {{ f.width }} × {{ f.height }})</p>{% endif %}
     </figcaption>
   </figure>
+  {% if eigenaar or (user and user.role == 'admin') %}
+  <div class="draaien">
+    <form class="inline" method="post" action="/api/foto/{{ f.id }}/draai" data-fetch="1" data-daarna="/foto/{{ f.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="richting" value="links"><button class="btn btn-stil" type="submit" title="Een kwartslag linksom draaien"><span aria-hidden="true">&#8634;</span> Linksom draaien</button></form>
+    <form class="inline" method="post" action="/api/foto/{{ f.id }}/draai" data-fetch="1" data-daarna="/foto/{{ f.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="richting" value="rechts"><button class="btn btn-stil" type="submit" title="Een kwartslag rechtsom draaien"><span aria-hidden="true">&#8635;</span> Rechtsom draaien</button> <span class="form-uit small muted"></span></form>
+  </div>
+  {% endif %}
   <nav class="buren">
     {% if vorige %}<a href="/foto/{{ vorige }}" rel="prev">Vorige</a>{% else %}<span></span>{% endif %}
     <a href="/wedstrijd/{{ f.event_slug }}">Alle foto's van {{ event_naam(f.event_slug) }}</a>

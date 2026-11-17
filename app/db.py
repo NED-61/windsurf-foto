@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS photos (
   naakt TEXT,                                -- naaktcheck: groen | oranje | rood | fout | uit (zie app/naakt.py); NULL = nog niet gecontroleerd
   naakt_detail TEXT,                         -- de treffers die meetelden, met score
   phash TEXT,                                -- vingerafdruk van het beeld (zie app/gelijkenis.py); '' = effen vlak, NULL = nog niet bekeken
-  lijkt_op TEXT                              -- JSON: leek bij het uploaden op deze foto's {gevraagd, treffers: [{id, afstand}]}; NULL = nergens op
+  lijkt_op TEXT,                             -- JSON: leek bij het uploaden op deze foto's {gevraagd, treffers: [{id, afstand}]}; NULL = nergens op
+  rotation INTEGER NOT NULL DEFAULT 0        -- met de hand gedraaid: graden rechtsom bovenop de EXIF-stand (0, 90, 180, 270); het origineel blijft zoals het is
 );
 CREATE INDEX IF NOT EXISTS photos_event ON photos(event_slug, status);
 CREATE INDEX IF NOT EXISTS photos_uploader ON photos(uploader_id, uploaded_at);
@@ -101,6 +102,10 @@ CREATE TABLE IF NOT EXISTS outbox (               -- mails die (nog) niet verstu
   sent INTEGER NOT NULL DEFAULT 0, error TEXT
 );
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS oude_keys (       -- key van een foto van voor het draaien; /i/<oude key>/... stuurt door naar de huidige
+  key TEXT PRIMARY KEY,
+  photo_id INTEGER NOT NULL
+);
 """
 
 
@@ -142,6 +147,7 @@ def _migreer(con):
     if "naakt_detail" not in kol: con.execute("ALTER TABLE photos ADD COLUMN naakt_detail TEXT")
     if "phash" not in kol: con.execute("ALTER TABLE photos ADD COLUMN phash TEXT")
     if "lijkt_op" not in kol: con.execute("ALTER TABLE photos ADD COLUMN lijkt_op TEXT")
+    if "rotation" not in kol: con.execute("ALTER TABLE photos ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0")
 
 
 def reset():

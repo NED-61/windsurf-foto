@@ -4,6 +4,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 
 from fastapi import APIRouter, Request, HTTPException, Form, File, UploadFile
 from fastapi.responses import JSONResponse, FileResponse
@@ -298,6 +299,7 @@ def _exact_dubbel(sha, wedstrijd):
         return JSONResponse({"fout": "Deze foto staat er al" + (" (bij een andere wedstrijd)" if dup["event_slug"] != wedstrijd else "") + ".", "dubbel": web.foto_json(dup, met_status=True)}, status_code=409)
     if dup:
         db.db().execute("DELETE FROM photos WHERE id=?", (dup["id"],))
+        db.db().execute("DELETE FROM oude_keys WHERE photo_id=?", (dup["id"],))
         oud = config.ORIG_DIR / "verwijderd" / images.orig_path(dup).name
         if oud.exists(): oud.unlink()
     return None
@@ -467,6 +469,39 @@ def foto_bewerken(request: Request, foto_id: int, bijschrift: str = Form(""), fo
                     (" ".join(bijschrift.split())[:300] or None, credit, licentie, herkomst, 1 if origineel_vrij in ("1", "ja", "on") else 0, foto_id))
     db.log("foto.bewerkt", u["id"], photo_id=foto_id, event_slug=r["event_slug"])
     return {"ok": True, "foto": web.foto_json(db.one("SELECT * FROM photos WHERE id=?", foto_id), met_status=True)}
+
+
+_draai_slot = threading.Lock()
+
+
+@router.post("/api/foto/{foto_id}/draai")
+def foto_draaien(request: Request, foto_id: int, richting: str = Form(""), csrf: str = Form("")):
+    """Een kwartslag rechtsom of linksom draaien (wens van Max, 17 november 2026: oude foto's die op hun kant staan). Het origineel blijft
+    byte-identiek; de verkleinde versies worden opnieuw uit het origineel gemaakt onder een nieuwe key (zie images.key_voor), en het oude
+    adres stuurt door. De vingerafdruk voor de lijkt-op-controle volgt de nieuwe stand."""
+    u, r = _eigen_of_admin(request, foto_id); auth.check_csrf(request, csrf)
+    auth.rate_limit(request, "draai", 300, 3600)
+    stap = {"rechts": 90, "links": 270, "om": 180}.get(richting)
+    if not stap: raise HTTPException(400, "Kies rechtsom of linksom.")
+    with _draai_slot:
+        r = db.one("SELECT * FROM photos WHERE id=?", foto_id)      # opnieuw lezen: twee klikken vlak na elkaar tellen allebei
+        orig = images.orig_path(r)
+        if not orig.exists(): raise HTTPException(404, "Het origineel ontbreekt; de foto kan niet gedraaid worden.")
+        draai = ((r["rotation"] or 0) + stap) % 360
+        oud, nieuw = r["key"], images.key_voor(r["sha256"], draai)
+        try:
+            info = images.maak_verkleind(orig, nieuw, draai)
+        except Exception as e:  # noqa: BLE001
+            if nieuw != oud: images.verwijder_verkleind(nieuw)
+            raise HTTPException(500, f"Draaien is mislukt ({type(e).__name__}).")
+        ph = gelijkenis.vingerafdruk(images.derived_dir(nieuw) / "m.jpg")
+        with db.tx() as con:
+            con.execute("UPDATE photos SET key=?, rotation=?, width=?, height=?, phash=? WHERE id=?", (nieuw, draai, info["width"], info["height"], ph, foto_id))
+            con.execute("DELETE FROM oude_keys WHERE key=?", (nieuw,))
+            if oud != nieuw: con.execute("INSERT OR REPLACE INTO oude_keys(key, photo_id) VALUES(?,?)", (oud, foto_id))
+        if oud != nieuw: images.verwijder_verkleind(oud)
+    db.log("foto.gedraaid", u["id"], photo_id=foto_id, event_slug=r["event_slug"], detail=f"{draai} graden rechtsom")
+    return {"ok": True, "bericht": "Foto gedraaid.", "foto": web.foto_json(db.one("SELECT * FROM photos WHERE id=?", foto_id), met_status=True)}
 
 
 @router.post("/api/foto/{foto_id}/verwijder")

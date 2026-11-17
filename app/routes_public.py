@@ -2,7 +2,7 @@
 import re
 
 from fastapi import APIRouter, Request, HTTPException, Form
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, RedirectResponse
 from starlette.requests import ClientDisconnect
 
 from . import config, db, auth, images, archive, web, mail, naakt, teller
@@ -113,7 +113,11 @@ def afbeelding(request: Request, key: str, size: str):
         return FileResponse(p, media_type="image/jpeg", headers=IMMUTABLE)
     if not KEY_RE.match(key): raise HTTPException(404, "Onbekende foto")
     r = db.one("SELECT id,key,status,uploader_id FROM photos WHERE key=?", key)
-    if not r: raise HTTPException(404, "Onbekende foto")
+    if not r:
+        # adres van voor het draaien (bijvoorbeeld uit een oudere export): door naar de huidige key, met dezelfde toegangsregels daar
+        a = db.one("SELECT p.key FROM oude_keys o JOIN photos p ON p.id=o.photo_id WHERE o.key=? AND p.status!='verwijderd'", key)
+        if a: return RedirectResponse(f"/i/{a['key']}/{size}.jpg", status_code=302, headers={"Cache-Control": "public, max-age=3600"})
+        raise HTTPException(404, "Onbekende foto")
     p = images.derived_dir(key) / f"{size}.jpg"
     if r["status"] == "zichtbaar":
         if not p.exists(): raise HTTPException(404, "Bestand ontbreekt")

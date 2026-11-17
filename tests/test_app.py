@@ -519,3 +519,57 @@ def test_api_rider_ook_fotos_van_wedstrijden(omgeving, monkeypatch):
     j = c.get("/api/rider/jan-jansen").json()
     assert j["n"] == 0 and j["n_wedstrijd"] == 0 and j["wedstrijd_fotos"] == []
 
+
+
+def test_foto_draaien(omgeving):
+    """Een kwartslag draaien: nieuwe key (de oude staat 'immutable' in caches), het oude adres stuurt door, breedte en hoogte wisselen,
+    het origineel blijft byte-identiek, en vier keer draaien brengt de oorspronkelijke key terug. Alleen de uploader en de beheerder."""
+    c, db, config = omgeving["c"], omgeving["db"], omgeving["config"]
+    u = registreer_en_bevestig(c, db, "lid@example.org", "Lid")
+    db.db().execute("UPDATE users SET trusted=1 WHERE id=?", (u["id"],))
+    im = Image.new("RGB", (1200, 800), (20, 20, 200)); im.paste((220, 30, 30), (0, 0, 600, 800))   # links rood, rechts blauw
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=90)
+    f = upload(c, "nk-slalom-2024", buf.getvalue()).json()["foto"]
+    rij = db.one("SELECT * FROM photos WHERE id=?", f["id"])
+    orig = pathlib.Path(config.ORIG_DIR) / rij["orig_rel"]
+    sha_orig = __import__("hashlib").sha256(orig.read_bytes()).hexdigest()
+    oud = f["key"]
+    assert oud == rij["sha256"][:16] and rij["rotation"] == 0
+    # iemand anders mag niet draaien
+    registreer_en_bevestig(c2 := __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(omgeving["app"]), db, "ander@example.org", "Ander")
+    assert c2.post(f"/api/foto/{f['id']}/draai", data={"csrf": csrf_van(c2, "/account"), "richting": "rechts"}).status_code == 403
+    assert c.post(f"/api/foto/{f['id']}/draai", data={"csrf": csrf_van(c, "/account"), "richting": "scheef"}).status_code == 400
+    # de knoppen staan op de fotopagina van de uploader, niet bij een bezoeker
+    assert "Rechtsom draaien" in c.get(f"/foto/{f['id']}").text
+    anoniem = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(omgeving["app"])
+    assert "Rechtsom draaien" not in anoniem.get(f"/foto/{f['id']}").text
+    # rechtsom: staand, rood boven
+    r = c.post(f"/api/foto/{f['id']}/draai", data={"csrf": csrf_van(c, "/account"), "richting": "rechts"})
+    assert r.status_code == 200 and r.json()["bericht"] == "Foto gedraaid."
+    g = r.json()["foto"]
+    assert g["key"] != oud and (g["w"], g["h"]) == (800, 1200)
+    with Image.open(io.BytesIO(anoniem.get(f"/i/{g['key']}/m.jpg").content)) as m:
+        assert m.size[1] > m.size[0]
+        boven, onder = m.getpixel((m.size[0] // 2, 50)), m.getpixel((m.size[0] // 2, m.size[1] - 50))
+        assert boven[0] > 150 and onder[2] > 150
+    assert f"/i/{g['key']}/m.jpg" in anoniem.get(f"/foto/{f['id']}").text
+    # het oude adres stuurt door, de oude bestanden zijn weg, het origineel is onaangeroerd
+    d = anoniem.get(f"/i/{oud}/t.jpg", follow_redirects=False)
+    assert d.status_code == 302 and d.headers["location"] == f"/i/{g['key']}/t.jpg"
+    assert anoniem.get(f"/i/{oud}/t.jpg").status_code == 200
+    from app import images
+    assert not (images.derived_dir(oud) / "m.jpg").exists()
+    assert __import__("hashlib").sha256(orig.read_bytes()).hexdigest() == sha_orig
+    assert db.one("SELECT phash FROM photos WHERE id=?", f["id"])["phash"]
+    # de beheerder mag ook; nog drie keer rechtsom (of één keer linksom terug) geeft weer de oorspronkelijke key
+    a = admin_client(omgeving)
+    for _ in range(2): a.post(f"/api/foto/{f['id']}/draai", data={"csrf": csrf_van(a, "/beheer"), "richting": "rechts"})
+    r = c.post(f"/api/foto/{f['id']}/draai", data={"csrf": csrf_van(c, "/account"), "richting": "rechts"})
+    assert r.json()["foto"]["key"] == oud and (r.json()["foto"]["w"], r.json()["foto"]["h"]) == (1200, 800)
+    assert db.one("SELECT rotation FROM photos WHERE id=?", f["id"])["rotation"] == 0
+    assert anoniem.get(f"/i/{oud}/m.jpg", follow_redirects=False).status_code == 200
+    assert anoniem.get(f"/i/{g['key']}/m.jpg", follow_redirects=False).status_code == 302
+    # linksom vanaf 0 is 270
+    r = c.post(f"/api/foto/{f['id']}/draai", data={"csrf": csrf_van(c, "/account"), "richting": "links"})
+    assert db.one("SELECT rotation FROM photos WHERE id=?", f["id"])["rotation"] == 270 and r.json()["foto"]["w"] == 800
+    assert db.one("SELECT COUNT(*) n FROM log WHERE action='foto.gedraaid'")["n"] == 5

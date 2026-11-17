@@ -32,6 +32,7 @@ input.klein { font: inherit; font-size: .85rem; padding: .15rem .4rem; border: 1
 .foto-detail figure { margin: 0; }
 .foto-detail img { width: 100%; height: auto; max-height: 85vh; object-fit: contain; background: var(--hover); border-radius: 3px; }
 .foto-detail figcaption { margin-top: .5rem; }
+.draaien { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
 .caption { font-size: 1.05rem; }
 .buren { display: flex; justify-content: space-between; gap: 1rem; margin-top: .75rem; }
 .tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
