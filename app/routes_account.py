@@ -14,8 +14,17 @@ router = APIRouter()
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 
 
+MISLUKT_PER_ACCOUNT = 30   # mislukte inlogpogingen per account per uur; daarna een uur niet (tegen raden vanaf veel adressen tegelijk)
+REGISTRATIES_PER_UUR = 30  # nieuwe accounts per uur voor de hele dienst: genoeg voor een drukke dag, te weinig om de mailbox te misbruiken
+
+
+def veilig_pad(pad: str) -> bool:
+    """Alleen een pad op deze dienst. '//host' en '/\\host' zijn voor een browser een ander domein, dus die niet."""
+    return bool(pad) and pad.startswith("/") and not pad.startswith("//") and "\\" not in pad and not any(ord(c) < 32 for c in pad)
+
+
 def _terug(pad: str) -> str:
-    return pad if pad and pad.startswith("/") and not pad.startswith("//") else "/account"
+    return pad if veilig_pad(pad) else "/account"
 
 
 # ---------------------------------------------------------------- registreren en bevestigen
@@ -37,17 +46,21 @@ def registreren_post(request: Request, email: str = Form(""), naam: str = Form("
     elif wachtwoord != wachtwoord2: fout = "De twee wachtwoorden zijn niet gelijk."
     elif db.one("SELECT id FROM users WHERE email=?", email): fout = "Er is al een account met dit adres. Log in, of vraag een nieuw wachtwoord aan."
     if fout: return web.render(request, "registreren.html", status_code=400, fout=fout, email=email, naam=naam)
+    if not auth.binnen_limiet("registreren:alle", REGISTRATIES_PER_UUR, 3600):
+        db.log("registratie.limiet", detail=email)
+        raise HTTPException(429, "Er zijn het afgelopen uur erg veel accounts aangemaakt. Probeer het over een uur nog eens.")
     cur = db.db().execute("INSERT INTO users(email,pw_hash,name,created_at) VALUES(?,?,?,?)", (email, auth.hash_pw(wachtwoord), naam, db.now()))
     uid = cur.lastrowid
     db.log("registratie", uid, detail=email)
-    _stuur_bevestiging(uid, naam, email)
+    _stuur_bevestiging(uid, email)
     return web.render(request, "bericht.html", titel="Bijna klaar", tekst=f"We hebben een mail gestuurd naar {email}. Klik op de link in die mail om je adres te bevestigen; daarna kun je uploaden. Geen mail? Kijk in de spam, of vraag op je accountpagina een nieuwe aan.",
                       link="/inloggen", linktekst="Naar inloggen")
 
 
-def _stuur_bevestiging(uid, naam, email):
+def _stuur_bevestiging(uid, email):
+    """Zonder de ingevulde naam: het adres is nog niet bevestigd, dus anders kon iemand een eigen tekst naar een vreemd adres laten mailen."""
     t = auth.new_token(uid, "bevestig", 24)
-    onderwerp, tekst = mail.bevestiging(naam, f"{config.APP_URL}/bevestig/{t}")
+    onderwerp, tekst = mail.bevestiging(f"{config.APP_URL}/bevestig/{t}")
     mail.send(email, onderwerp, tekst)
 
 
@@ -73,8 +86,12 @@ def inloggen(request: Request, terug: str = ""):
 def inloggen_post(request: Request, email: str = Form(""), wachtwoord: str = Form(""), terug: str = Form(""), csrf: str = Form("")):
     auth.check_csrf(request, csrf)
     auth.rate_limit(request, "inloggen", 10)
-    u = db.one("SELECT * FROM users WHERE email=?", email.strip().lower())
+    adres = email.strip().lower()
+    if auth.aantal("inloggen-mislukt:" + adres, 3600) >= MISLUKT_PER_ACCOUNT:
+        raise HTTPException(429, "Te veel mislukte pogingen voor dit account. Probeer het over een uur nog eens, of vraag een nieuw wachtwoord aan.")
+    u = db.one("SELECT * FROM users WHERE email=?", adres)
     if not u or not auth.check_pw(wachtwoord, u["pw_hash"]):
+        auth.tel("inloggen-mislukt:" + adres)
         return web.render(request, "inloggen.html", status_code=400, fout="Onbekend adres of verkeerd wachtwoord.", email=email, terug=terug)
     db.db().execute("UPDATE users SET last_login=? WHERE id=?", (db.now(), u["id"]))
     db.log("login", u["id"])
@@ -102,9 +119,10 @@ def vergeten_post(request: Request, email: str = Form(""), csrf: str = Form(""))
     auth.check_csrf(request, csrf)
     auth.rate_limit(request, "vergeten", 5)
     u = db.one("SELECT * FROM users WHERE email=?", email.strip().lower())
-    if u:
+    # hooguit 3 per adres per uur, stil (dezelfde melding): zo kan niemand via deze dienst iemands postvak volmailen
+    if u and auth.binnen_limiet("vergeten-adres:" + u["email"], 3, 3600):
         t = auth.new_token(u["id"], "reset", 2)
-        onderwerp, tekst = mail.wachtwoord_reset(u["name"], f"{config.APP_URL}/wachtwoord/{t}")
+        onderwerp, tekst = mail.wachtwoord_reset(u["name"] if u["email_verified"] else "", f"{config.APP_URL}/wachtwoord/{t}")
         mail.send(u["email"], onderwerp, tekst)
     return web.render(request, "bericht.html", titel="Mail onderweg", tekst="Als dit adres bij ons bekend is, staat er binnen een paar minuten een mail in je postvak met een link om een nieuw wachtwoord in te stellen (2 uur geldig).")
 
@@ -152,7 +170,7 @@ def bevestiging_opnieuw(request: Request, csrf: str = Form("")):
     u = auth.require_user(request); auth.check_csrf(request, csrf)
     auth.rate_limit(request, "bevestiging", 3, 3600)
     if u["email_verified"]: return web.redirect("/account", "Je adres is al bevestigd.")
-    _stuur_bevestiging(u["id"], u["name"], u["email"])
+    _stuur_bevestiging(u["id"], u["email"])
     return web.redirect("/account", f"Er is een nieuwe bevestigingsmail gestuurd naar {u['email']}.")
 
 
@@ -172,7 +190,9 @@ def wachtwoord_wijzigen(request: Request, huidig: str = Form(""), wachtwoord: st
     if len(wachtwoord) < 10 or wachtwoord != wachtwoord2: raise HTTPException(400, "Minstens 10 tekens, en twee keer hetzelfde.")
     db.db().execute("UPDATE users SET pw_hash=? WHERE id=?", (auth.hash_pw(wachtwoord), u["id"]))
     db.log("wachtwoord.gewijzigd", u["id"])
-    return web.redirect("/account", "Je wachtwoord is gewijzigd.")
+    resp = web.redirect("/account", "Je wachtwoord is gewijzigd. Op andere apparaten ben je nu uitgelogd.")
+    auth.set_cookie(resp, u["id"])   # deze sessie blijft ingelogd; alle andere vervallen (nieuw wachtwoordmerk)
+    return resp
 
 
 # ---------------------------------------------------------------- ridernaam claimen

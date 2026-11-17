@@ -6,6 +6,7 @@ import hashlib
 import random
 import threading
 import datetime
+import warnings
 from pathlib import Path
 
 from PIL import Image, ImageOps, ImageDraw
@@ -19,6 +20,16 @@ except Exception:  # noqa: BLE001
 from . import config
 
 Image.MAX_IMAGE_PIXELS = 200_000_000
+# Boven de grens geeft Pillow standaard alleen een waarschuwing (en pas bij het dubbele een fout): nu meteen een fout, zodat één upload
+# niet gigabytes geheugen vraagt. 200 megapixel is ruim genoeg voor elke camera en telefoon.
+warnings.simplefilter("error", Image.DecompressionBombWarning)
+# Alleen de lezers van de vier toegestane soorten openen een upload. Zonder deze lijst probeert Pillow elke lezer die hij kent
+# (TIFF, EPS, FPX, ...), en juist daar zaten de ernstigste lekken van de afgelopen jaren.
+FORMATEN = list(config.TOEGESTANE_TYPES)
+
+
+def open_upload(path: Path):
+    return Image.open(path, formats=FORMATEN)
 
 
 def sha256_file(path: Path) -> str:
@@ -31,7 +42,7 @@ def sha256_file(path: Path) -> str:
 def herken(path: Path):
     """Geeft (formaat, extensie) of None als het geen toegestane afbeelding is."""
     try:
-        with Image.open(path) as im:
+        with open_upload(path) as im:
             fmt = im.format
             im.verify()
     except Exception:  # noqa: BLE001
@@ -77,7 +88,7 @@ def orig_path(r) -> Path:
 
 def opnamedatum_van(path: Path):
     try:
-        with Image.open(path) as im: return opnamedatum(im)
+        with open_upload(path) as im: return opnamedatum(im)
     except Exception:  # noqa: BLE001
         return None
 
@@ -86,7 +97,7 @@ def maak_verkleind(src: Path, key: str) -> dict:
     """Maakt t.jpg (400) en m.jpg (1600) in derived_dir(key). Geeft breedte, hoogte (na draaien volgens EXIF) en opnamedatum."""
     d = derived_dir(key)
     d.mkdir(parents=True, exist_ok=True)
-    with Image.open(src) as im:
+    with open_upload(src) as im:
         taken = opnamedatum(im)
         im = ImageOps.exif_transpose(im)
         w, h = im.size

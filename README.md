@@ -76,7 +76,21 @@ app/mail.py            SMTP en outbox
 app/db.py              schema (users, claims, claim_codes, photos, tags, reports, log, outbox, kv)
 app/templates/         Jinja2; app/static/site.css is een kopie uit de archief-repo (tools/site_assets/site.css)
 tests/test_app.py      de hele keten in een tijdelijke map
+tests/test_beveiliging.py  de beveiliging van 0.6.0 (zie hieronder)
 ```
+
+## Beveiliging (0.6.0, 17 november 2026)
+
+De dienst staat open op internet en moet voor iedereen makkelijk bereikbaar blijven (geen captcha, geen inlogmuur voor kijkers). Wat hem beschermt:
+
+- **Foto's lezen**: alleen de lezers van JPEG, PNG, WebP en HEIF openen een upload (`images.open_upload`, `formats=`); de ernstigste lekken in Pillow zaten in andere lezers. Boven 200 megapixel is het meteen een fout (geen gigabytes geheugen). Houd Pillow bij: elke nieuwe versie lost lekken op.
+- **Groottegrens vóór alles** (`main.Groottegrens`): een upload hooguit `MAX_UPLOAD_MB` + 1 MB, al het andere 1 MB, ook zonder Content-Length. Nodig omdat FastAPI een formulier al leest voordat de route kijkt of je bent ingelogd.
+- **Limieten**: per adres (`auth.client_ip` neemt het láátste adres uit X-Forwarded-For, dat zet de funnel; het eerste kan een bezoeker zelf verzinnen), 30 mislukte inlogpogingen per account per uur, 3 mails "wachtwoord vergeten" per adres per uur (stil), 30 nieuwe accounts per uur voor de hele dienst. Een mail naar een nog onbevestigd adres bevat geen tekst van de aanvrager (geen naam).
+- **Sessies** dragen een merk van het wachtwoord: een nieuw wachtwoord logt alle andere apparaten uit. Sessies van voor 0.6.0 gelden niet meer (iedereen logt één keer opnieuw in).
+- **Doorsturen** na inloggen alleen naar een pad op de dienst zelf (`routes_account.veilig_pad`: geen `//host` of `/\host`).
+- **Koppen** (`main.koppen`): Content-Security-Policy met een nonce per pagina (scripts in een template krijgen `nonce="{{ csp_nonce }}"`, geen `onclick=`/`onsubmit=`: gebruik `data-bevestig` of `data-niet-versturen`, zie `static/galerij.js`), HSTS als `APP_URL` https is, geen frames, geen `Server`-kop.
+
+Nog bij de beheerder: een lang wachtwoord voor het beheeraccount, en de container als `--user 99:100` laten draaien (UNRAID.md).
 
 Statussen van een foto: `wacht` (wachtrij), `zichtbaar`, `verborgen` (door beheer, met reden), `verwijderd` (door uploader of beheer; het origineel staat dan in `ORIG_DIR/verwijderd/`). Er wordt nooit iets echt weggegooid.
 

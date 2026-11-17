@@ -71,15 +71,83 @@ def _zorg_admin():
         db.db().execute("UPDATE users SET role='admin', trusted=1, email_verified=1, blocked=0 WHERE id=?", (u["id"],))
 
 
+def csp(nonce: str | None) -> str:
+    """Wat een pagina van deze dienst mag laden: alleen van zichzelf, scripts alleen uit /static of met de nonce van deze pagina
+    (de paar scripts in de templates). Een stukje html dat er toch tussen glipt, kan dan niets uitvoeren."""
+    return "; ".join([
+        "default-src 'self'",
+        "script-src 'self'" + (f" 'nonce-{nonce}'" if nonce else ""),
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "connect-src 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'none'",
+        "object-src 'none'",
+    ])
+
+
 @app.middleware("http")
 async def koppen(request: Request, call_next):
     resp = await call_next(request)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if config.is_https():
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     if not request.url.path.startswith(("/i/", "/api/", "/static/", "/o/")):
         resp.headers.setdefault("Cache-Control", "no-store")
         resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Content-Security-Policy", csp(request.scope.get("csp_nonce")))
+        resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
     return resp
+
+
+class Groottegrens:
+    """Weigert te grote verzoeken voordat iets ze leest. Dat moet vóór de routes: FastAPI leest een formulier (en zet een upload in een
+    tijdelijk bestand) al voordat de route kijkt of je bent ingelogd. Een upload mag MAX_UPLOAD_MB plus wat ruimte voor de andere velden,
+    al het andere 1 MB."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        grens = (config.MAX_UPLOAD_MB + 1) * 1024 * 1024 if scope["path"] == "/api/upload" else 1024 * 1024
+        fout = JSONResponse({"fout": f"Te groot (hooguit {grens // (1024 * 1024)} MB)."}, status_code=413)
+        lengte = dict(scope["headers"]).get(b"content-length")
+        if lengte is not None:
+            try: n = int(lengte)
+            except ValueError: n = grens + 1
+            if n > grens:
+                return await fout(scope, receive, send)
+        # Zonder lengte (in stukken verstuurd): tellen tijdens het lezen. Over de grens krijgt de app 'verbinding verbroken' (dan stopt
+        # hij met lezen) en wordt zijn antwoord vervangen door 413. Een fout gooien kan hier niet: de andere middleware pakt die in.
+        st = {"gelezen": 0, "te_groot": False, "gestart": False, "vervangen": False}
+
+        async def ontvang():
+            if st["te_groot"]: return {"type": "http.disconnect"}
+            msg = await receive()
+            if msg["type"] == "http.request":
+                st["gelezen"] += len(msg.get("body", b""))
+                if st["gelezen"] > grens:
+                    st["te_groot"] = True
+                    return {"type": "http.disconnect"}
+            return msg
+
+        async def stuur(msg):
+            if msg["type"] == "http.response.start":
+                if st["te_groot"] and not st["gestart"]:
+                    st["gestart"] = st["vervangen"] = True
+                    await send({"type": "http.response.start", "status": 413, "headers": fout.raw_headers})
+                    await send({"type": "http.response.body", "body": fout.body})
+                    return
+                st["gestart"] = True
+            if st["vervangen"]: return
+            await send(msg)
+        await self.app(scope, ontvang, stuur)
+
+
+app.add_middleware(Groottegrens)
 
 
 @app.exception_handler(HTTPException)

@@ -17,7 +17,8 @@ router = APIRouter()
 
 def _antwoord(request, data, terug):
     """Formulieren op /beheer en /account sturen terug naar een pagina; de api geeft json."""
-    if terug and terug.startswith("/") and not terug.startswith("//"):
+    from .routes_account import veilig_pad
+    if veilig_pad(terug):
         return web.redirect(terug, data.get("bericht"))
     return JSONResponse(data)
 

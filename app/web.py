@@ -1,5 +1,6 @@
 """Gedeelde hulpjes voor de pagina's: templates, datumopmaak, foto-als-json, doorsturen met een bericht."""
 import datetime
+import secrets
 import zoneinfo
 from pathlib import Path
 from urllib.parse import quote
@@ -39,6 +40,8 @@ templates.env.globals.update(cfg=config, LICENTIES=config.LICENTIES, HERKOMST=co
 
 def render(request: Request, naam: str, status_code: int = 200, **ctx):
     u = auth.current_user(request)
+    # nonce voor de scripts in deze pagina; main.koppen zet hem in de Content-Security-Policy
+    ctx.setdefault("csp_nonce", request.scope.setdefault("csp_nonce", secrets.token_urlsafe(16)))
     ctx.setdefault("user", u)
     ctx.setdefault("csrf", auth.csrf_token(request))
     ctx.setdefault("bericht", request.query_params.get("bericht"))

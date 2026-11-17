@@ -29,7 +29,7 @@
 {% endif %}
 {% endblock %}
 {% block script %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var q = document.getElementById("rider-q"), hits = document.getElementById("rider-hits"), pid = document.getElementById("person_id"),
       gek = document.getElementById("rider-gekozen"), knop = document.getElementById("claim-knop");

@@ -59,15 +59,17 @@ def mail_admins(subject: str, body: str):
 
 
 # ---------------------------------------------------------------- teksten
-def bevestiging(naam, link):
+def bevestiging(link):
+    """Zonder naam: die is door de aanvrager ingevuld en het adres is nog niet bevestigd (geen eigen tekst naar een vreemd adres)."""
     return ("Bevestig je e-mailadres",
-            f"Hoi {naam},\n\nJe hebt een account gemaakt bij de foto's van het Windsurf Wedstrijdarchief. Bevestig je e-mailadres met deze link "
+            f"Hoi,\n\nMet dit adres is een account gemaakt bij de foto's van het Windsurf Wedstrijdarchief. Bevestig je e-mailadres met deze link "
             f"(geldig 24 uur):\n\n{link}\n\nHeb je dit niet gedaan, dan kun je deze mail negeren.\n")
 
 
 def wachtwoord_reset(naam, link):
+    """naam is leeg als het adres nog niet bevestigd is (zie bevestiging)."""
     return ("Nieuw wachtwoord instellen",
-            f"Hoi {naam},\n\nMet deze link stel je een nieuw wachtwoord in (geldig 2 uur):\n\n{link}\n\nHeb je dit niet aangevraagd, dan kun je deze mail negeren.\n")
+            f"Hoi{' ' + naam if naam else ''},\n\nMet deze link stel je een nieuw wachtwoord in (geldig 2 uur):\n\n{link}\n\nHeb je dit niet aangevraagd, dan kun je deze mail negeren.\n")
 
 
 def claim_beslist(naam, rider, goedgekeurd, toelichting):

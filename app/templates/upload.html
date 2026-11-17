@@ -25,7 +25,7 @@
   </section>
   <section class="block">
     <div class="block-h"><h2>2. Over deze foto's</h2></div>
-    <form class="form" id="opties" onsubmit="return false">
+    <form class="form" id="opties" data-niet-versturen="1">
       <fieldset class="herkomst">
         <legend>Wie heeft de foto's gemaakt?</legend>
         {% for k, v in HERKOMST.items() %}<label class="check"><input type="radio" name="herkomst" value="{{ k }}"{% if k == 'eigen' %} checked{% endif %}> {{ v }}</label>{% endfor %}

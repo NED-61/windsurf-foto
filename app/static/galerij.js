@@ -3,6 +3,13 @@
 (function () {
   "use strict";
   var csrf = (document.querySelector('meta[name="csrf"]') || {}).content || "";
+  /* gewone formulieren: data-bevestig vraagt eerst om bevestiging, data-niet-versturen verstuurt nooit (in plaats van onsubmit=..., want de
+     Content-Security-Policy staat geen scripts in attributen toe) */
+  document.addEventListener("submit", function (e) {
+    var f = e.target;
+    if (f.matches("form[data-fetch]")) return;
+    if (f.matches("form[data-niet-versturen]") || (f.dataset.bevestig && !confirm(f.dataset.bevestig))) e.preventDefault();
+  });
   document.addEventListener("submit", function (e) {
     var f = e.target;
     if (!f.matches("form[data-fetch]")) return;

@@ -3,6 +3,7 @@ import re
 
 from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.requests import ClientDisconnect
 
 from . import config, db, auth, images, archive, web, mail, naakt, teller
 
@@ -204,8 +205,11 @@ async def tel(request: Request):
     """Bezoekersteller (app/teller.py): één paginaweergave, verstuurd met navigator.sendBeacon vanaf de archiefsite of een andere pagina
     op ned-61.com. Antwoordt altijd 204, ook als de weergave niet telt; een bericht groter dan 2 kB wordt niet gelezen."""
     body = b""
-    async for blok in request.stream():
-        body += blok
-        if len(body) > 2000: return Response(status_code=204)
-    teller.registreer(request.headers.get("origin"), request.client.host if request.client else None, request.headers.get("user-agent", ""), body)
+    try:
+        async for blok in request.stream():
+            body += blok
+            if len(body) > 2000: return Response(status_code=204)
+    except ClientDisconnect:   # bezoeker weg, of te groot (main.Groottegrens): niets te tellen
+        return Response(status_code=204)
+    teller.registreer(request.headers.get("origin"), auth.client_ip(request), request.headers.get("user-agent", ""), body)
     return Response(status_code=204)

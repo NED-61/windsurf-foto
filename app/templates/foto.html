@@ -84,7 +84,7 @@
 {% endblock %}
 {% block script %}
 {% if mag_taggen %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var q = document.getElementById("rider-q"), hits = document.getElementById("rider-hits"), pid = document.getElementById("person_id"),
       gek = document.getElementById("rider-gekozen"), slug = document.getElementById("tags-blok").dataset.slug;
